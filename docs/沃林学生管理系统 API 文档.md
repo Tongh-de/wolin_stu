@@ -1,0 +1,343 @@
+# 沃林学生管理系统 API 文档（仅增删改接口）
+
+## 概述
+
+- **Base URL**: `/api/v1`
+- **协议**: HTTP/HTTPS
+- **数据格式**: JSON
+- **API 文档**（Swagger）: 启动 FastAPI 后访问 `/docs`
+
+## 权限设计
+
+### 角色定义
+| 角色    | 权限说明                                       |
+| ------- | ---------------------------------------------- |
+| admin   | 管理员，拥有所有增删改权限                     |
+| teacher | 老师，仅可操作所带班级的学生信息（增、改、删） |
+
+## 日志记录
+
+每次增删改操作均记录以下信息到日志表 `operation_log`：
+- `user_id`：操作用户ID
+- `username`：操作用户名
+- `role`：用户角色
+- `operation_type`：CREATE / UPDATE / DELETE
+- `target_table`：操作的表名（student/class/teacher/score/employment）
+- `target_id`：操作记录的主键ID
+- `request_data`：请求体原始数据（JSON）
+- `response_status`：成功/失败
+- `error_message`：错误信息（如有）
+- `ip_address`：客户端IP
+- `user_agent`：客户端UA
+- `created_at`：操作时间
+
+### 日志表示例（SQL）
+
+```sql
+CREATE TABLE operation_log (
+    id INT AUTO_INCREMENT PRIMARY KEY,
+    user_id INT NOT NULL,
+    username VARCHAR(50),
+    role VARCHAR(20),
+    operation_type VARCHAR(10),
+    target_table VARCHAR(50),
+    target_id INT,
+    request_data TEXT,
+    response_status VARCHAR(10),
+    error_message TEXT,
+    ip_address VARCHAR(45),
+    user_agent TEXT,
+    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+);
+```
+
+## 通用响应格式
+
+```json
+{
+  "code": 200,
+  "message": "success",
+  "data": {}
+}
+```
+
+## 1. 学生基本信息模块（增、改、删）
+
+| 方法   | 端点             | 描述         |
+| :----- | :--------------- | :----------- |
+| POST   | `/students`      | 创建新学生   |
+| PUT    | `/students/{id}` | 更新学生信息 |
+| DELETE | `/students/{id}` | 逻辑删除学生 |
+
+### 1.1 创建学生
+
+**POST** `/students`
+
+**请求体**
+
+json
+
+```
+{
+  "student_no": "S2024001",
+  "name": "张三",
+  "class_id": 1,
+  "gender": "男",
+  "age": 22,
+  "birthplace": "湖南长沙",
+  "graduated_school": "湖南大学",
+  "major": "计算机科学与技术",
+  "enrollment_date": "2024-09-01",
+  "graduation_date": "2026-06-30",
+  "education": "本科",
+  "consultant_id": 101
+}
+```
+
+
+
+**响应**：返回创建的学生对象
+
+### 1.2 更新学生信息
+
+**PUT** `/students/{id}`
+
+**路径参数**
+
+| 参数名 | 类型 | 描述        |
+| :----- | :--- | :---------- |
+| id     | int  | 学生主键 ID |
+
+**请求体**：字段均为可选，只传需要更新的字段
+
+json
+
+```
+{
+  "name": "张三丰",
+  "age": 23
+}
+```
+
+
+
+**响应**：返回更新后的学生对象
+
+### 1.3 逻辑删除学生
+
+**DELETE** `/students/{id}`
+
+**响应**
+
+json
+
+```
+{
+  "code": 200,
+  "message": "学生已逻辑删除"
+}
+```
+
+
+
+------
+
+## 2. 班级管理模块（增、改、删）
+
+| 方法   | 端点            | 描述         |
+| :----- | :-------------- | :----------- |
+| POST   | `/classes`      | 创建班级     |
+| PUT    | `/classes/{id}` | 更新班级信息 |
+| DELETE | `/classes/{id}` | 删除班级     |
+
+### 2.1 创建班级
+
+**POST** `/classes`
+
+**请求体**
+
+json
+
+```
+{
+  "class_no": "C2024001",
+  "name": "Java2301",
+  "start_date": "2024-03-01",
+  "head_teacher": "王老师",
+  "course_teacher": "李老师"
+}
+```
+
+
+
+### 2.2 更新班级信息
+
+**PUT** `/classes/{id}`
+
+**请求体**：只传需要更新的字段
+
+json
+
+```
+{
+  "head_teacher": "张老师"
+}
+```
+
+
+
+### 2.3 删除班级
+
+**DELETE** `/classes/{id}`
+
+------
+
+## 3. 老师管理模块（增、改、删）
+
+| 方法   | 端点             | 描述         |
+| :----- | :--------------- | :----------- |
+| POST   | `/teachers`      | 添加老师     |
+| PUT    | `/teachers/{id}` | 更新老师信息 |
+| DELETE | `/teachers/{id}` | 删除老师     |
+
+### 3.1 添加老师
+
+**POST** `/teachers`
+
+**请求体**
+
+json
+
+```
+{
+  "teacher_no": "T001",
+  "name": "王老师",
+  "gender": "女",
+  "phone": "13800000000",
+  "classes_taught": [1, 2]
+}
+```
+
+
+
+### 3.2 更新老师信息
+
+**PUT** `/teachers/{id}`
+
+**请求体**：只传需要更新的字段
+
+json
+
+```
+{
+  "phone": "13900000000"
+}
+```
+
+
+
+### 3.3 删除老师
+
+**DELETE** `/teachers/{id}`
+
+------
+
+## 4. 考核成绩管理模块（增、改、删）
+
+| 方法   | 端点                 | 描述             |
+| :----- | :------------------- | :--------------- |
+| POST   | `/scores`            | 录入单次考核成绩 |
+| PUT    | `/scores/{score_id}` | 修改指定成绩     |
+| DELETE | `/scores/{score_id}` | 删除指定成绩     |
+
+>   注：按考核序次录入，每个学生每个序次只有一条成绩记录。
+
+### 4.1 录入成绩
+
+**POST** `/scores`
+
+**请求体**
+
+json
+
+```
+{
+  "student_id": 1,
+  "exam_sequence": 3,
+  "score": 78.0
+}
+```
+
+
+
+**响应**：返回创建的成绩记录
+
+### 4.2 修改成绩
+
+**PUT** `/scores/{score_id}`
+
+**请求体**
+
+json
+
+```
+{
+  "score": 88.0
+}
+```
+
+
+
+### 4.3 删除成绩
+
+**DELETE** `/scores/{score_id}`
+
+------
+
+## 5. 就业管理模块（增、改、删）
+
+| 方法   | 端点                           | 描述                              |
+| :----- | :----------------------------- | :-------------------------------- |
+| POST   | `/employments`                 | 创建/更新就业信息（若存在则更新） |
+| DELETE | `/employments/{employment_id}` | 删除就业信息                      |
+
+>   说明：添加/更新合并为一个接口，根据 student_id 判断是否存在。
+
+### 5.1 创建/更新就业信息
+
+**POST** `/employments`
+
+**请求体**
+
+json
+
+```
+{
+  "student_id": 1,
+  "employment_open_date": "2026-03-01",
+  "offer_date": "2026-03-15",
+  "company_name": "阿里巴巴",
+  "salary": 25
+}
+```
+
+
+
+**行为**：若该学生已有就业记录则执行更新，否则创建新记录。
+
+**响应**：返回最终的就业信息对象
+
+### 5.2 删除就业信息
+
+**DELETE** `/employments/{employment_id}`
+
+------
+
+## 附录：错误码
+
+| 错误码 | 描述                   |
+| :----- | :--------------------- |
+| 400    | 请求参数错误           |
+| 404    | 资源不存在             |
+| 409    | 资源冲突（如重复创建） |
+| 500    | 服务器内部错误         |
