@@ -11,6 +11,7 @@ class ClassService:
             "class_name": cls.class_name,
             "start_time": cls.start_time.isoformat() if cls.start_time else None,
             "head_teacher_id": cls.head_teacher_id,
+            "head_teacher_name": cls.head_teacher_info.teacher_name if cls.head_teacher_info else None,
             "is_deleted": cls.is_deleted
         }
 
