@@ -1183,9 +1183,10 @@
 
                         <!-- 成绩管理 -->
                         <el-tab-pane label="成绩管理" name="exam">
-                            <div class="flex gap-3 mb-4">
+                            <div class="flex gap-3 mb-4 items-center">
                                 <button @click="openExamDialog(null)" class="btn btn-success"><i class="fas fa-plus"></i>新增成绩</button>
                                 <button @click="openExamMaintenanceDialog" class="btn btn-default"><i class="fas fa-tools"></i>成绩维护</button>
+                                <span class="ml-auto text-sm text-gray-500">共 {{ examPagination.total }} 条记录</span>
                             </div>
                             <div class="data-table">
                                 <el-table :data="examRecords" stripe v-loading="examLoading" highlight-current-row @current-change="handleExamSelection">
@@ -1212,6 +1213,18 @@
                                         </template>
                                     </el-table-column>
                                 </el-table>
+                                <!-- 分页 -->
+                                <div class="flex justify-end mt-4">
+                                    <el-pagination
+                                        :current-page="examPagination.page"
+                                        :page-size="examPagination.page_size"
+                                        :page-sizes="[10, 20, 50, 100]"
+                                        :total="examPagination.total"
+                                        layout="total, sizes, prev, pager, next, jumper"
+                                        @size-change="handleExamSizeChange"
+                                        @current-change="handleExamPageChange"
+                                    />
+                                </div>
                             </div>
                         </el-tab-pane>
 
@@ -1533,6 +1546,7 @@ const app = createApp({
         // 成绩
         const examRecords = ref([]);
         const examLoading = ref(false);
+        const examPagination = ref({ page: 1, page_size: 10, total: 0, total_pages: 0 });
         const examDialogVisible = ref(false);
         const examForm = ref({ stu_id: '', seq_no: '', grade: '', exam_date: '' });
         let editingExamKey = null;
@@ -1942,13 +1956,30 @@ const app = createApp({
         const loadExamRecords = async () => {
             examLoading.value = true;
             try {
-                const res = await axios.get('/exam/records');
+                const res = await axios.get('/exam/records', {
+                    params: { page: examPagination.value.page, page_size: examPagination.value.page_size }
+                });
                 examRecords.value = res.data.data || [];
+                examPagination.value.total = res.data.total || 0;
+                examPagination.value.total_pages = res.data.total_pages || 0;
             } catch (err) {
+                console.error('加载成绩记录失败:', err);
                 examRecords.value = [];
+                examPagination.value.total = 0;
             } finally {
                 examLoading.value = false;
             }
+        };
+
+        const handleExamSizeChange = (val) => {
+            examPagination.value.page_size = val;
+            examPagination.value.page = 1;
+            loadExamRecords();
+        };
+
+        const handleExamPageChange = (val) => {
+            examPagination.value.page = val;
+            loadExamRecords();
         };
         
         const handleExamSelection = (row) => {
@@ -2249,7 +2280,9 @@ const app = createApp({
             openClassDialog, saveClass, deleteClass,
             openTeacherDialog, saveTeacher, deleteTeacher,
             teacherOptions, headTeacherOptions,
-            examRecords, examLoading, examDialogVisible, examForm,
+            examRecords, examLoading, examPagination, loadExamRecords,
+            handleExamSizeChange, handleExamPageChange,
+            examDialogVisible, examForm,
             openExamDialog, saveExam, deleteExam, selectedExam, handleExamSelection,
             examMaintenanceDialogVisible, examQueryForm, queriedExamData, examQueryLoading,
             queryExamRecord, openExamMaintenanceDialog,
