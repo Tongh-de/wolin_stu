@@ -3,18 +3,21 @@ from sqlalchemy.orm import Session
 from pydantic import BaseModel
 from database import get_db
 from model.user import User
-from auth import get_password_hash, authenticate_user, create_access_token
+from services.auth_service import verify_password, get_password_hash, authenticate_user, create_access_token
 from datetime import timedelta
 
 router = APIRouter(prefix="/auth", tags=["认证"])
+
 
 class UserCreate(BaseModel):
     username: str
     password: str
 
+
 class UserLogin(BaseModel):
     username: str
     password: str
+
 
 @router.post("/register")
 def register(user: UserCreate, db: Session = Depends(get_db)):
@@ -26,6 +29,7 @@ def register(user: UserCreate, db: Session = Depends(get_db)):
     db.add(new_user)
     db.commit()
     return {"msg": "注册成功"}
+
 
 @router.post("/login")
 def login(form_data: UserLogin, db: Session = Depends(get_db)):

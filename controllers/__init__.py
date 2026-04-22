@@ -1,0 +1,9 @@
+from .student_controller import router as student_router
+from .class_controller import router as class_router
+from .teacher_controller import router as teacher_router
+from .exam_controller import router_exam as exam_router
+from .employment_controller import router as employment_router
+from .statistics_controller import router as statistics_router
+from .query_controller import router as query_router
+from .auth_controller import router as auth_router
+from .text2sql_controller import router as text2sql_router

@@ -1,8 +1,8 @@
-from pydantic import BaseModel,Field
+from pydantic import BaseModel, Field
 from datetime import date
 from typing import Optional
 
-# 更新用（前端传参）
+
 class EmploymentUpdate(BaseModel):
     stu_name: Optional[str] = None
     open_time: Optional[date] = None
@@ -10,7 +10,7 @@ class EmploymentUpdate(BaseModel):
     company: Optional[str] = None
     salary: Optional[float] = Field(None, gt=0)
 
-# 查询返回用（响应模型）
+
 class EmploymentResp(BaseModel):
     emp_id: int
     stu_id: int
