@@ -435,7 +435,13 @@
         .chat-ai-msg:hover {
             box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
         }
-        
+
+        /* 工具使用标记 */
+        .tool-badge {
+            display: flex;
+            align-items: center;
+        }
+
         /* 文本内容 */
         .text-content {
             white-space: pre-wrap;
@@ -811,7 +817,10 @@
                     <i class="fas fa-chart-pie"></i>数据看板
                 </a>
                 <a @click="activeTab = 'query'" :class="['nav-item', { active: activeTab === 'query' }]">
-                    <i class="fas fa-robot"></i>智能问答
+                    <i class="fas fa-database"></i>基础查询
+                </a>
+                <a @click="activeTab = 'agent'" :class="['nav-item', { active: activeTab === 'agent' }]">
+                    <i class="fas fa-robot"></i>Agent助手
                 </a>
                 <a @click="activeTab = 'statistics'" :class="['nav-item', { active: activeTab === 'statistics' }]">
                     <i class="fas fa-chart-line"></i>高级统计
@@ -952,33 +961,33 @@
                     </div>
                 </div>
 
-                <!-- ========== 智能问答 ========== -->
+                <!-- ========== 基础查询 ========== -->
                 <div v-if="activeTab === 'query'" class="h-[calc(100vh-160px)] px-0">
                     <div class="chat-container h-full rounded-none border-0">
                         <!-- 头部 -->
                         <div class="chat-header flex items-center gap-4">
                             <div class="chat-header-icon flex-shrink-0">
-                                <i class="fas fa-robot"></i>
+                                <i class="fas fa-database"></i>
                             </div>
-                            <div>
-                                <h2 class="text-xl font-semibold">AI 智能助手</h2>
-                                <p class="text-blue-200 text-sm opacity-90">支持自然语言查询数据，也可以问业务问题</p>
+                            <div class="flex-1">
+                                <h2 class="text-xl font-semibold">基础数据查询</h2>
+                                <p class="text-blue-200 text-sm opacity-90">用自然语言查询学生、班级、成绩、就业等数据</p>
                             </div>
                         </div>
                         
                         <!-- 消息区域 -->
                         <div class="flex-1 flex flex-col overflow-hidden">
-                            <!-- 欢迎语（初始状态） -->
+                            <!-- 欢迎语 -->
                             <div v-if="chatMessages.length <= 1" class="flex-1 flex items-center justify-center p-8">
                                 <div class="text-center max-w-2xl">
                                     <div class="chat-welcome-icon inline-flex mb-4">
-                                        <i class="fas fa-comments text-4xl"></i>
+                                        <i class="fas fa-database text-4xl"></i>
                                     </div>
-                                    <h3 class="text-xl font-semibold text-gray-700 mb-3">开始智能对话</h3>
+                                    <h3 class="text-xl font-semibold text-gray-700 mb-3">开始数据查询</h3>
                                     <p class="text-gray-500 mb-6">试试这样问我：</p>
                                     <div class="grid grid-cols-3 gap-4">
                                         <div class="bg-white p-4 rounded-xl border border-gray-100 text-left hover:shadow-md transition cursor-pointer" @click="currentQuestion='学生总共有多少人？'; sendQuestion()">
-                                            <i class="fas fa-database text-blue-400 mb-2"></i>
+                                            <i class="fas fa-users text-blue-400 mb-2"></i>
                                             <p class="text-sm text-gray-600">"学生总共有多少人？"</p>
                                         </div>
                                         <div class="bg-white p-4 rounded-xl border border-gray-100 text-left hover:shadow-md transition cursor-pointer" @click="currentQuestion='各班的平均成绩是多少？'; sendQuestion()">
@@ -997,27 +1006,22 @@
                             <div class="chat-messages flex-1 overflow-y-auto" ref="chatContainer" :class="{'hidden': chatMessages.length <= 1}">
                                 <div class="chat-messages-inner">
                                     <div v-for="msg in chatMessages" :key="msg.id" :class="['chat-message-wrap', msg.role === 'user' ? 'user' : 'ai']">
-                                        <!-- 头像 -->
                                         <div :class="['chat-avatar', msg.role === 'user' ? 'user-avatar-chat' : 'ai-avatar-chat']">
-                                            <i :class="msg.role === 'user' ? 'fas fa-user' : 'fas fa-robot'"></i>
+                                            <i :class="msg.role === 'user' ? 'fas fa-user' : 'fas fa-database'"></i>
                                         </div>
-                                        <!-- 消息内容 -->
                                         <div :class="['chat-message', msg.role === 'user' ? 'chat-user-msg' : 'chat-ai-msg']">
                                             <!-- SQL 查询结果 -->
                                             <div v-if="msg.type === 'sql'">
-                                                <!-- 单一数值结果 -->
                                                 <div v-if="msg.isSingleValue" class="sql-result-single">
                                                     <span class="sql-result-label">{{ msg.content.split('：')[0] }}</span>
                                                     <span class="sql-result-value">{{ msg.content.split('：')[1] }}</span>
                                                 </div>
-                                                <!-- 表格结果 -->
                                                 <div v-else>
                                                     <div v-html="msg.content"></div>
                                                     <p class="result-count" v-if="msg.count">
                                                         <i class="fas fa-list mr-1"></i>共 {{ msg.count }} 条结果
                                                     </p>
                                                 </div>
-                                                <!-- SQL 语句折叠 -->
                                                 <details class="sql-toggle">
                                                     <summary>
                                                         <i class="fas fa-database text-xs"></i>
@@ -1026,15 +1030,12 @@
                                                     <div class="sql-code-block">{{ msg.sql }}</div>
                                                 </details>
                                             </div>
-                                            <!-- 普通文本消息 -->
                                             <div v-else class="text-content">{{ msg.content }}</div>
                                         </div>
                                     </div>
-                                    
-                                    <!-- 加载中 -->
                                     <div v-if="isLoading" class="chat-message-wrap ai">
                                         <div class="chat-avatar ai-avatar-chat">
-                                            <i class="fas fa-robot"></i>
+                                            <i class="fas fa-database"></i>
                                         </div>
                                         <div class="chat-message chat-ai-msg">
                                             <div class="typing-indicator">
@@ -1053,6 +1054,105 @@
                                     <div class="chat-input-box">
                                         <input type="text" v-model="currentQuestion" @keyup.enter="sendQuestion" placeholder="输入问题，按回车发送...">
                                         <button @click="sendQuestion" class="chat-send-btn" :disabled="isLoading">
+                                            <i class="fas fa-paper-plane"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========== Agent助手 ========== -->
+                <div v-if="activeTab === 'agent'" class="h-[calc(100vh-160px)] px-0">
+                    <div class="chat-container h-full rounded-none border-0">
+                        <!-- 头部 -->
+                        <div class="chat-header flex items-center gap-4">
+                            <div class="chat-header-icon flex-shrink-0">
+                                <i class="fas fa-robot"></i>
+                            </div>
+                            <div class="flex-1">
+                                <h2 class="text-xl font-semibold">Agent 智能助手</h2>
+                                <p class="text-blue-200 text-sm opacity-90">支持天气查询、时间查询、林黛玉角色扮演等智能功能</p>
+                            </div>
+                            <!-- 林黛玉人格开关 -->
+                            <div class="flex items-center gap-2 bg-white/10 rounded-full px-3 py-1.5">
+                                <span :class="['text-xs', agentPersona === 'lindaidai' ? 'text-red-200 font-medium' : 'text-blue-200']">林黛玉</span>
+                                <label class="relative inline-flex items-center cursor-pointer">
+                                    <input type="checkbox" class="sr-only peer" v-model="agentPersona" true-value="lindaidai" false-value="">
+                                    <div class="w-9 h-5 bg-white/20 peer-focus:ring-2 peer-focus:ring-white/50 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-red-400"></div>
+                                </label>
+                            </div>
+                        </div>
+                        
+                        <!-- 消息区域 -->
+                        <div class="flex-1 flex flex-col overflow-hidden">
+                            <!-- 欢迎语 -->
+                            <div v-if="agentMessages.length <= 1" class="flex-1 flex items-center justify-center p-8">
+                                <div class="text-center max-w-2xl">
+                                    <div class="chat-welcome-icon inline-flex mb-4">
+                                        <i class="fas fa-robot text-4xl"></i>
+                                    </div>
+                                    <h3 class="text-xl font-semibold text-gray-700 mb-3">开始智能对话</h3>
+                                    <p class="text-gray-500 mb-6">试试这样问我：</p>
+                                    <div class="grid grid-cols-2 gap-4">
+                                        <div class="bg-gradient-to-r from-amber-50 to-orange-50 p-4 rounded-xl border border-amber-100 text-left hover:shadow-md transition cursor-pointer" @click="agentQuestion='北京天气怎么样？'; sendAgentQuestion()">
+                                            <i class="fas fa-cloud-sun text-amber-500 mb-2"></i>
+                                            <p class="text-sm text-gray-600">"北京天气怎么样？"</p>
+                                        </div>
+                                        <div class="bg-gradient-to-r from-blue-50 to-cyan-50 p-4 rounded-xl border border-blue-100 text-left hover:shadow-md transition cursor-pointer" @click="agentQuestion='现在几点了？'; sendAgentQuestion()">
+                                            <i class="fas fa-clock text-blue-500 mb-2"></i>
+                                            <p class="text-sm text-gray-600">"现在几点了？"</p>
+                                        </div>
+                                        <div class="bg-gradient-to-r from-red-50 to-pink-50 p-4 rounded-xl border border-red-100 text-left hover:shadow-md transition cursor-pointer" @click="agentQuestion='你好，林黛玉！'; sendAgentQuestion()">
+                                            <i class="fas fa-book text-red-500 mb-2"></i>
+                                            <p class="text-sm text-gray-600">"你好，林黛玉！"</p>
+                                        </div>
+                                        <div class="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-xl border border-purple-100 text-left hover:shadow-md transition cursor-pointer" @click="agentQuestion='帮我写一段Python代码'; sendAgentQuestion()">
+                                            <i class="fas fa-code text-purple-500 mb-2"></i>
+                                            <p class="text-sm text-gray-600">"帮我写一段Python代码"</p>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 消息列表 -->
+                            <div class="chat-messages flex-1 overflow-y-auto" ref="agentChatContainer" :class="{'hidden': agentMessages.length <= 1}">
+                                <div class="chat-messages-inner">
+                                    <div v-for="msg in agentMessages" :key="msg.id" :class="['chat-message-wrap', msg.role === 'user' ? 'user' : 'ai']">
+                                        <div :class="['chat-avatar', msg.role === 'user' ? 'user-avatar-chat' : 'ai-avatar-chat']">
+                                            <i :class="msg.role === 'user' ? 'fas fa-user' : 'fas fa-robot'"></i>
+                                        </div>
+                                        <div :class="['chat-message', msg.role === 'user' ? 'chat-user-msg' : 'chat-ai-msg']">
+                                            <div v-if="msg.tools_used" class="tool-badge mb-2">
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-600">
+                                                    <i class="fas fa-tools"></i> 使用工具 · {{ msg.model_used || 'Agent' }}
+                                                </span>
+                                            </div>
+                                            <div class="text-content">{{ msg.content }}</div>
+                                        </div>
+                                    </div>
+                                    <div v-if="agentLoading" class="chat-message-wrap ai">
+                                        <div class="chat-avatar ai-avatar-chat">
+                                            <i class="fas fa-robot"></i>
+                                        </div>
+                                        <div class="chat-message chat-ai-msg">
+                                            <div class="typing-indicator">
+                                                <span class="typing-dot"></span>
+                                                <span class="typing-dot"></span>
+                                                <span class="typing-dot"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 输入框 -->
+                            <div class="chat-input-area border-t border-gray-200">
+                                <div class="max-w-6xl mx-auto px-6">
+                                    <div class="chat-input-box">
+                                        <input type="text" v-model="agentQuestion" @keyup.enter="sendAgentQuestion" placeholder="输入问题，按回车发送...">
+                                        <button @click="sendAgentQuestion" class="chat-send-btn" :disabled="agentLoading">
                                             <i class="fas fa-paper-plane"></i>
                                         </button>
                                     </div>
@@ -1637,7 +1737,8 @@ const app = createApp({
         const pageTitle = computed(() => {
             const titles = {
                 'dashboard': '数据看板',
-                'query': '智能问答',
+                'query': '基础查询',
+                'agent': 'Agent助手',
                 'statistics': '高级统计',
                 'knowledge': '知识库管理',
                 'management': '数据管理'
@@ -1660,12 +1761,24 @@ const app = createApp({
             id: 1,
             role: 'ai',
             type: 'text',
-            content: '您好！我是智能助手，可以问数据问题（如"学生有多少人？"或"每个班的平均分？"）或业务问题。'
+            content: '您好！我是数据查询助手，可以问学生、班级、成绩、就业等数据问题。'
         }]);
         const currentQuestion = ref('');
         const isLoading = ref(false);
         const chatContainer = ref(null);
         const currentSessionId = ref(null);
+        
+        // Agent 助手
+        const agentMessages = ref([{
+            id: 1,
+            role: 'ai',
+            content: '您好！我是Agent智能助手，可以查天气、问时间、聊林黛玉，还能写代码、解答各种问题。'
+        }]);
+        const agentQuestion = ref('');
+        const agentLoading = ref(false);
+        const agentChatContainer = ref(null);
+        const agentSessionId = ref(null);
+        const agentPersona = ref(''); // 人格设置：lindaidai=林黛玉
         
         // 数据管理
         const mgmtLoading = ref(false);
@@ -2320,7 +2433,7 @@ const app = createApp({
         };
         
         // ============================================
-        // 智能问答
+        // 基础查询
         // ============================================
         const sendQuestion = async () => {
             if (!currentQuestion.value.trim() || isLoading.value) return;
@@ -2330,22 +2443,23 @@ const app = createApp({
             isLoading.value = true;
             await nextTick();
             scrollToBottom();
-            
+
             try {
                 const payload = { question };
                 if (currentSessionId.value) payload.session_id = currentSessionId.value;
+
                 const res = await axios.post('/query/natural', payload);
-                
+
                 if (res.data && res.data.session_id) currentSessionId.value = res.data.session_id;
                 else if (res.data && res.data.data && res.data.data.session_id) currentSessionId.value = res.data.data.session_id;
-                
+
                 const result = res.data;
                 if (result.type === 'sql') {
                     const data = result.data;
                     const count = result.count;
                     let formattedContent = '';
                     let isSingleValue = false;
-                    
+
                     if (count === 0) {
                         formattedContent = '<div class="text-center py-2"><i class="fas fa-inbox text-gray-400 text-xl"></i><p class="mt-1">未查询到相关数据</p></div>';
                     } else if (count === 1 && Object.keys(data[0]).length === 1) {
@@ -2382,6 +2496,57 @@ const app = createApp({
         const scrollToBottom = () => {
             if (chatContainer.value) {
                 chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
+            }
+        };
+
+        // ============================================
+        // Agent 助手
+        // ============================================
+        const sendAgentQuestion = async () => {
+            if (!agentQuestion.value.trim() || agentLoading.value) return;
+            const question = agentQuestion.value;
+            agentMessages.value.push({ id: Date.now(), role: 'user', content: question });
+            agentQuestion.value = '';
+            agentLoading.value = true;
+            await nextTick();
+            scrollAgentToBottom();
+
+            try {
+                const payload = { question };
+                if (agentSessionId.value) payload.session_id = agentSessionId.value;
+                if (agentPersona.value) payload.persona = agentPersona.value;
+                
+                // 添加对话历史作为上下文
+                const context = agentMessages.value.map(msg => ({
+                    role: msg.role,
+                    content: msg.content
+                }));
+                payload.context = context;
+
+                const res = await axios.post('/agent/chat', payload);
+                const result = res.data;
+
+                if (result.session_id) agentSessionId.value = result.session_id;
+
+                agentMessages.value.push({
+                    id: Date.now(),
+                    role: 'ai',
+                    content: result.answer,
+                    tools_used: result.tools_used,
+                    model_used: result.model_used
+                });
+            } catch (err) {
+                agentMessages.value.push({ id: Date.now(), role: 'ai', content: `抱歉，发生了错误：${err.response?.data?.detail || err.message}` });
+            } finally {
+                agentLoading.value = false;
+                await nextTick();
+                scrollAgentToBottom();
+            }
+        };
+        
+        const scrollAgentToBottom = () => {
+            if (agentChatContainer.value) {
+                agentChatContainer.value.scrollTop = agentChatContainer.value.scrollHeight;
             }
         };
 
@@ -2544,7 +2709,9 @@ const app = createApp({
             // 知识库管理
             kbUploadLoading, kbUploadCategory, kbCategories, handleKnowledgeUpload,
             searchKnowledge, kbSearchQuery, kbSearchResults, kbSearchLoading,
-            askKnowledge, kbChatMessages, kbChatLoading, kbCurrentQuestion
+            askKnowledge, kbChatMessages, kbChatLoading, kbCurrentQuestion,
+            // Agent助手
+            agentMessages, agentQuestion, agentLoading, agentPersona, sendAgentQuestion, agentChatContainer
         };
     }
 });

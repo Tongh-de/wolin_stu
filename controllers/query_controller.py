@@ -19,10 +19,12 @@ load_dotenv()
 
 router = APIRouter(prefix="/query", tags=["自然语言查询"])
 
-# 使用 Kimi 大模型
+# 使用 Kimi 大模型（添加超时配置）
 client = AsyncOpenAI(
     api_key=os.getenv("KIMI_API_KEY"),
-    base_url="https://api.moonshot.cn/v1"
+    base_url="https://api.moonshot.cn/v1",
+    timeout=60.0,  # 60秒超时
+    max_retries=3   # 最多重试3次
 )
 
 vectordb = None
@@ -116,24 +118,32 @@ async def classify_intent_llm(question: str, history_text: str = "") -> str:
     # 关键词优先匹配（更可靠）
     analysis_keywords = ["为什么", "原因", "怎么", "解释", "趋势", "分析一下"]
     sql_keywords = ["多少", "几个", "查询", "有多少", "统计", "排名", "最高", "最低", "平均", "所有", "找出", "看看"]
-    
+    chat_keywords = ["你好", "hi", "hello", "你是谁", "帮忙", "天气", "时间", "几点"]
+
     question_lower = question.lower()
-    
+
     if any(kw in question_lower for kw in sql_keywords):
         return "sql"
     if any(kw in question_lower for kw in analysis_keywords):
         return "analysis"
-    
-    # LLM 辅助分类
+    if any(kw in question_lower for kw in chat_keywords):
+        return "chat"
+
+    # LLM 辅助分类（带超时和重试）
     try:
         prompt = INTENT_CLASSIFICATION_PROMPT.format(history=history_text, question=question)
-        resp = await client.chat.completions.create(model="moonshot-v1-8k", messages=[{"role": "user", "content": prompt}], temperature=0, max_tokens=10)
+        resp = await client.chat.completions.create(
+            model="moonshot-v1-8k",
+            messages=[{"role": "user", "content": prompt}],
+            temperature=0,
+            max_tokens=10
+        )
         intent = resp.choices[0].message.content.strip().lower()
         if intent in ["sql", "analysis", "chat"]:
             return intent
     except Exception as e:
         print(f"LLM意图分类失败: {e}")
-    
+
     return "sql"  # 默认按SQL处理
 
 
@@ -152,7 +162,13 @@ async def generate_sql(question: str, retry: bool = False, previous_sql: Optiona
     user = f"数据库结构：\n{schema}\n\n问题：{question}\n输出SQL："
     if previous_sql:
         user = f"上一轮SQL：\n{previous_sql}\n\n问题：{question}\n数据库结构：\n{schema}\n输出SQL："
-    resp = await client.chat.completions.create(model="moonshot-v1-8k", messages=[{"role": "system", "content": system}, {"role": "user", "content": user}], temperature=0.1)
+
+    resp = await client.chat.completions.create(
+        model="moonshot-v1-8k",
+        messages=[{"role": "system", "content": system}, {"role": "user", "content": user}],
+        temperature=0.1,
+        timeout=30.0  # 30秒超时
+    )
     sql = resp.choices[0].message.content.strip()
     sql = re.sub(r'^```sql\s*', '', sql)
     sql = re.sub(r'\s*```$', '', sql)
@@ -244,7 +260,12 @@ async def natural_query(req: QueryRequest, db: Session = Depends(get_db)):
 
         analysis_prompt = f"你是一个数据分析专家。基于以下数据回答用户问题。\n\n数据：\n{data_context}\n\n问题：{question}\n"
         try:
-            resp = await client.chat.completions.create(model="moonshot-v1-8k", messages=[{"role": "user", "content": analysis_prompt}], temperature=0.5)
+            resp = await client.chat.completions.create(
+                model="moonshot-v1-8k",
+                messages=[{"role": "user", "content": analysis_prompt}],
+                temperature=0.5,
+                timeout=30.0
+            )
             answer = resp.choices[0].message.content
             ConversationService.save_turn(db, session_id, turn_index, question, answer_text=answer)
             return {"type": "answer", "session_id": session_id, "turn_index": turn_index, "answer": answer}
@@ -254,7 +275,12 @@ async def natural_query(req: QueryRequest, db: Session = Depends(get_db)):
     else:
         chat_prompt = f"用户：{question}\n助手："
         try:
-            resp = await client.chat.completions.create(model="moonshot-v1-8k", messages=[{"role": "user", "content": chat_prompt}], temperature=0.7)
+            resp = await client.chat.completions.create(
+                model="moonshot-v1-8k",
+                messages=[{"role": "user", "content": chat_prompt}],
+                temperature=0.7,
+                timeout=30.0
+            )
             answer = resp.choices[0].message.content
             ConversationService.save_turn(db, session_id, turn_index, question, answer_text=answer)
             return {"type": "answer", "session_id": session_id, "turn_index": turn_index, "answer": answer}

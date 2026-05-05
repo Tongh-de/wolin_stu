@@ -31,3 +31,4 @@ pymilvus
 sentence-transformers
 python-docx
 PyPDF2
+httpx  # 用于工具调用获取天气等外部数据

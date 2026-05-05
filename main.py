@@ -40,6 +40,7 @@ from controllers import (
     auth_router
 )
 from controllers.rag_router import router as rag_router
+from controllers.agent_router import router as agent_router
 from utils.logger import app_logger
 
 # Lifespan 事件处理
@@ -116,6 +117,7 @@ app.include_router(statistics_router)
 app.include_router(query_router)
 app.include_router(auth_router)
 app.include_router(rag_router)
+app.include_router(agent_router)
 
 # 创建所有表
 Base.metadata.create_all(bind=engine)
