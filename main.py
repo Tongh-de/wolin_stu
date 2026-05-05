@@ -1,10 +1,32 @@
+import os
+import time
 import uvicorn
+from contextlib import asynccontextmanager
+from dotenv import load_dotenv
+
 from fastapi import FastAPI, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import JSONResponse
 from starlette.responses import HTMLResponse
-import time
+
+# 加载环境变量
+load_dotenv()
+
+# 检查必要的环境变量
+def check_required_env():
+    required = ["DASHSCOPE_API_KEY"]
+    missing = [k for k in required if not os.getenv(k)]
+    if missing:
+        print(f"错误: 缺少必要的环境变量: {', '.join(missing)}")
+        print("请在 .env 文件中设置以下变量:")
+        for k in missing:
+            print(f"  {k}=your-api-key-here")
+        return False
+    return True
+
+if not check_required_env():
+    exit(1)
 
 from database import engine, Base
 from controllers import (
@@ -15,25 +37,30 @@ from controllers import (
     employment_router,
     statistics_router,
     query_router,
-    auth_router,
-    text2sql_router
+    auth_router
 )
-from knowledge_base import build_knowledge_base
+from controllers.rag_router import router as rag_router
 from utils.logger import app_logger
 
-# 创建所有表
-Base.metadata.create_all(bind=engine)
-app_logger.info("=" * 50)
-app_logger.info("沃林学生管理系统启动")
-app_logger.info("=" * 50)
+# Lifespan 事件处理
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    # 启动时
+    app_logger.info("🚀 应用服务已启动")
+    app_logger.info("📚 Swagger文档: http://127.0.0.1:8082/docs")
+    app_logger.info("🌐 前端界面: http://127.0.0.1:8082/static/index.html")
+    yield
+    # 关闭时
+    app_logger.info("🛑 应用服务正在关闭...")
+    app_logger.info("=" * 50)
 
-# 构建知识库
-build_knowledge_base()
 
+# 创建 FastAPI 应用
 app = FastAPI(
     title="沃林学生管理系统",
     description="FastAPI + MySQL 学生信息/成绩/就业/统计管理",
-    version="1.0.0"
+    version="1.0.0",
+    lifespan=lifespan
 )
 
 
@@ -88,7 +115,13 @@ app.include_router(employment_router)
 app.include_router(statistics_router)
 app.include_router(query_router)
 app.include_router(auth_router)
-app.include_router(text2sql_router)
+app.include_router(rag_router)
+
+# 创建所有表
+Base.metadata.create_all(bind=engine)
+app_logger.info("=" * 50)
+app_logger.info("沃林学生管理系统启动")
+app_logger.info("=" * 50)
 
 
 @app.get("/", response_class=HTMLResponse)
@@ -105,20 +138,6 @@ def root():
     """
 
 
-# 应用启动事件
-@app.on_event("startup")
-async def startup_event():
-    app_logger.info("🚀 应用服务已启动")
-    app_logger.info("📚 Swagger文档: http://127.0.0.1:8082/docs")
-    app_logger.info("🌐 前端界面: http://127.0.0.1:8082/static/index.html")
-
-
-# 应用关闭事件
-@app.on_event("shutdown")
-async def shutdown_event():
-    app_logger.info("🛑 应用服务正在关闭...")
-    app_logger.info("=" * 50)
-
 
 if __name__ == '__main__':
-    uvicorn.run(app, host='127.0.0.1', port=8082)
+    uvicorn.run(app, host='127.0.0.1', port=8099)

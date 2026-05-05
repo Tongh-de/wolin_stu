@@ -19,10 +19,10 @@ load_dotenv()
 
 router = APIRouter(prefix="/query", tags=["自然语言查询"])
 
-# 使用千问（通义千问）API
+# 使用 Kimi 大模型
 client = AsyncOpenAI(
-    api_key="sk-950da4fd8b9a4f3680b5ec8467afafab",
-    base_url="https://dashscope.aliyuncs.com/compatible-mode/v1"
+    api_key=os.getenv("KIMI_API_KEY"),
+    base_url="https://api.moonshot.cn/v1"
 )
 
 vectordb = None
@@ -127,7 +127,7 @@ async def classify_intent_llm(question: str, history_text: str = "") -> str:
     # LLM 辅助分类
     try:
         prompt = INTENT_CLASSIFICATION_PROMPT.format(history=history_text, question=question)
-        resp = await client.chat.completions.create(model="qwen-plus", messages=[{"role": "user", "content": prompt}], temperature=0, max_tokens=10)
+        resp = await client.chat.completions.create(model="moonshot-v1-8k", messages=[{"role": "user", "content": prompt}], temperature=0, max_tokens=10)
         intent = resp.choices[0].message.content.strip().lower()
         if intent in ["sql", "analysis", "chat"]:
             return intent
@@ -152,7 +152,7 @@ async def generate_sql(question: str, retry: bool = False, previous_sql: Optiona
     user = f"数据库结构：\n{schema}\n\n问题：{question}\n输出SQL："
     if previous_sql:
         user = f"上一轮SQL：\n{previous_sql}\n\n问题：{question}\n数据库结构：\n{schema}\n输出SQL："
-    resp = await client.chat.completions.create(model="qwen-plus", messages=[{"role": "system", "content": system}, {"role": "user", "content": user}], temperature=0.1)
+    resp = await client.chat.completions.create(model="moonshot-v1-8k", messages=[{"role": "system", "content": system}, {"role": "user", "content": user}], temperature=0.1)
     sql = resp.choices[0].message.content.strip()
     sql = re.sub(r'^```sql\s*', '', sql)
     sql = re.sub(r'\s*```$', '', sql)
@@ -244,7 +244,7 @@ async def natural_query(req: QueryRequest, db: Session = Depends(get_db)):
 
         analysis_prompt = f"你是一个数据分析专家。基于以下数据回答用户问题。\n\n数据：\n{data_context}\n\n问题：{question}\n"
         try:
-            resp = await client.chat.completions.create(model="qwen-plus", messages=[{"role": "user", "content": analysis_prompt}], temperature=0.5)
+            resp = await client.chat.completions.create(model="moonshot-v1-8k", messages=[{"role": "user", "content": analysis_prompt}], temperature=0.5)
             answer = resp.choices[0].message.content
             ConversationService.save_turn(db, session_id, turn_index, question, answer_text=answer)
             return {"type": "answer", "session_id": session_id, "turn_index": turn_index, "answer": answer}
@@ -254,7 +254,7 @@ async def natural_query(req: QueryRequest, db: Session = Depends(get_db)):
     else:
         chat_prompt = f"用户：{question}\n助手："
         try:
-            resp = await client.chat.completions.create(model="qwen-plus", messages=[{"role": "user", "content": chat_prompt}], temperature=0.7)
+            resp = await client.chat.completions.create(model="moonshot-v1-8k", messages=[{"role": "user", "content": chat_prompt}], temperature=0.7)
             answer = resp.choices[0].message.content
             ConversationService.save_turn(db, session_id, turn_index, question, answer_text=answer)
             return {"type": "answer", "session_id": session_id, "turn_index": turn_index, "answer": answer}

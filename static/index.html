@@ -816,6 +816,9 @@
                 <a @click="activeTab = 'statistics'" :class="['nav-item', { active: activeTab === 'statistics' }]">
                     <i class="fas fa-chart-line"></i>高级统计
                 </a>
+                <a @click="activeTab = 'knowledge'" :class="['nav-item', { active: activeTab === 'knowledge' }]">
+                    <i class="fas fa-brain"></i>知识库管理
+                </a>
                 <a @click="activeTab = 'management'" :class="['nav-item', { active: activeTab === 'management' }]">
                     <i class="fas fa-database"></i>数据管理
                 </a>
@@ -1081,6 +1084,133 @@
                         </h3>
                         <div id="examSeqChart" style="height: 350px;"></div>
                     </div>
+                </div>
+
+                <!-- ========== 知识库管理 ========== -->
+                <div v-if="activeTab === 'knowledge'" class="space-y-6">
+                    <!-- 标签页切换 -->
+                    <el-tabs class="custom-tabs">
+                        <!-- 上传文档 -->
+                        <el-tab-pane label="上传文档">
+                            <div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+                                <h3 class="text-lg font-semibold text-gray-800 mb-6">
+                                    <i class="fas fa-cloud-upload-alt text-blue-500 mr-2"></i>上传知识库文档
+                                </h3>
+                                <p class="text-gray-500 text-sm mb-6">支持 TXT、PDF、DOCX 格式，文档将被向量化存储到 Milvus</p>
+
+                                <el-upload
+                                    class="upload-demo"
+                                    drag
+                                    :http-request="handleKnowledgeUpload"
+                                    :before-upload="() => { kbUploadLoading = true; return true; }"
+                                    :on-change="() => {}"
+                                    accept=".txt,.pdf,.docx"
+                                >
+                                    <i class="fas fa-cloud-upload-alt text-5xl text-blue-400 mb-4"></i>
+                                    <div class="el-upload__text">将文件拖到此处，或<em>点击上传</em></div>
+                                    <template #tip>
+                                        <div class="el-upload__tip">支持 txt/pdf/docx 文件</div>
+                                    </template>
+                                </el-upload>
+
+                                <div class="mt-6">
+                                    <label class="block text-sm font-medium text-gray-700 mb-2">文档分类</label>
+                                    <el-select v-model="kbUploadCategory" placeholder="请选择分类" style="width: 300px;">
+                                        <el-option v-for="cat in kbCategories" :key="cat.value" :label="cat.label" :value="cat.value" />
+                                    </el-select>
+                                </div>
+                            </div>
+                        </el-tab-pane>
+
+                        <!-- 知识检索 -->
+                        <el-tab-pane label="知识检索">
+                            <div class="bg-white rounded-2xl p-8 shadow-sm border border-gray-100">
+                                <h3 class="text-lg font-semibold text-gray-800 mb-6">
+                                    <i class="fas fa-search text-green-500 mr-2"></i>知识库检索
+                                </h3>
+
+                                <div class="flex gap-4 mb-6">
+                                    <el-input
+                                        v-model="kbSearchQuery"
+                                        placeholder="输入关键词搜索知识库..."
+                                        size="large"
+                                        @keyup.enter="searchKnowledge"
+                                    >
+                                        <template #append>
+                                            <el-button :loading="kbSearchLoading" @click="searchKnowledge">
+                                                <i class="fas fa-search"></i>
+                                            </el-button>
+                                        </template>
+                                    </el-input>
+                                </div>
+
+                                <div v-if="kbSearchResults.length > 0" class="space-y-4">
+                                    <div v-for="(result, index) in kbSearchResults" :key="index"
+                                         class="p-4 bg-gray-50 rounded-xl border border-gray-100">
+                                        <div class="flex items-start gap-3">
+                                            <div class="w-8 h-8 bg-blue-100 rounded-lg flex items-center justify-center text-blue-600 font-semibold text-sm">
+                                                {{ index + 1 }}
+                                            </div>
+                                            <div class="flex-1">
+                                                <p class="text-gray-800">{{ result.content }}</p>
+                                                <div class="mt-2 flex gap-2">
+                                                    <span v-if="result.metadata?.filename" class="text-xs text-gray-500">
+                                                        <i class="fas fa-file mr-1"></i>{{ result.metadata.filename }}
+                                                    </span>
+                                                    <span v-if="result.metadata?.category" class="text-xs px-2 py-0.5 bg-blue-100 text-blue-600 rounded">
+                                                        {{ result.metadata.category }}
+                                                    </span>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                                <div v-else-if="kbSearchQuery && !kbSearchLoading" class="text-center text-gray-400 py-8">
+                                    暂无搜索结果
+                                </div>
+                            </div>
+                        </el-tab-pane>
+
+                        <!-- RAG 问答 -->
+                        <el-tab-pane label="RAG 问答">
+                            <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
+                                <h3 class="text-lg font-semibold text-gray-800 mb-4">
+                                    <i class="fas fa-robot text-purple-500 mr-2"></i>RAG 智能问答
+                                </h3>
+                                <p class="text-gray-500 text-sm mb-4">基于知识库的智能问答，请先上传相关文档</p>
+
+                                <!-- 聊天消息 -->
+                                <div class="h-[400px] overflow-y-auto mb-4 p-4 bg-gray-50 rounded-xl space-y-4">
+                                    <div v-for="msg in kbChatMessages" :key="msg.id"
+                                         :class="['flex', msg.role === 'user' ? 'justify-end' : 'justify-start']">
+                                        <div :class="['max-w-[70%] px-4 py-3 rounded-2xl',
+                                            msg.role === 'user' ? 'bg-blue-500 text-white' : 'bg-white border border-gray-200 text-gray-800']">
+                                            <p class="text-sm">{{ msg.content }}</p>
+                                        </div>
+                                    </div>
+                                    <div v-if="kbChatLoading" class="flex justify-start">
+                                        <div class="bg-white border border-gray-200 px-4 py-3 rounded-2xl">
+                                            <i class="fas fa-spinner fa-spin text-gray-400"></i>
+                                        </div>
+                                    </div>
+                                </div>
+
+                                <!-- 输入框 -->
+                                <div class="flex gap-3">
+                                    <el-input
+                                        v-model="kbCurrentQuestion"
+                                        placeholder="输入问题..."
+                                        size="large"
+                                        :disabled="kbChatLoading"
+                                        @keyup.enter="askKnowledge"
+                                    />
+                                    <el-button type="primary" size="large" :loading="kbChatLoading" @click="askKnowledge">
+                                        <i class="fas fa-paper-plane mr-1"></i>发送
+                                    </el-button>
+                                </div>
+                            </div>
+                        </el-tab-pane>
+                    </el-tabs>
                 </div>
 
                 <!-- ========== 数据管理 ========== -->
@@ -1509,6 +1639,7 @@ const app = createApp({
                 'dashboard': '数据看板',
                 'query': '智能问答',
                 'statistics': '高级统计',
+                'knowledge': '知识库管理',
                 'management': '数据管理'
             };
             return titles[activeTab.value] || '首页';
@@ -1567,7 +1698,27 @@ const app = createApp({
         const employmentForm = ref({ emp_id: null, stu_id: '', company: '', salary: '', offer_time: '' });
         let editingEmploymentId = null;
         const selectedEmployment = ref(null);
-        
+
+        // 知识库管理
+        const kbUploadLoading = ref(false);
+        const kbUploadCategory = ref('general');
+        const kbCategories = ref([
+            { value: 'general', label: '通用' },
+            { value: 'course', label: '课程资料' },
+            { value: 'policy', label: '政策法规' },
+            { value: 'faq', label: '常见问题' }
+        ]);
+        const kbSearchQuery = ref('');
+        const kbSearchResults = ref([]);
+        const kbSearchLoading = ref(false);
+        const kbChatMessages = ref([{
+            id: 1,
+            role: 'ai',
+            content: '您好！我是知识库问答助手。请先上传文档到知识库，然后我可以根据知识库内容回答您的问题。'
+        }]);
+        const kbCurrentQuestion = ref('');
+        const kbChatLoading = ref(false);
+
         // 表单
         const studentDialogVisible = ref(false);
         const classDialogVisible = ref(false);
@@ -2233,7 +2384,106 @@ const app = createApp({
                 chatContainer.value.scrollTop = chatContainer.value.scrollHeight;
             }
         };
-        
+
+        // ============================================
+        // 知识库管理
+        // ============================================
+        const handleKnowledgeUpload = async (options) => {
+            const { file } = options;
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('category', kbUploadCategory.value);
+
+            try {
+                const token = localStorage.getItem('access_token');
+                const res = await axios.post('/rag/upload', formData, {
+                    headers: {
+                        'Authorization': token ? `Bearer ${token}` : '',
+                        'Content-Type': 'multipart/form-data'
+                    }
+                });
+                if (res.data.code === 200) {
+                    ElMessage.success(`上传成功！文档已切分为 ${res.data.data.chunk_count} 个片段存入知识库`);
+                } else {
+                    ElMessage.error(res.data.message || '上传失败');
+                }
+            } catch (err) {
+                ElMessage.error('上传失败：' + (err.response?.data?.message || err.message));
+            } finally {
+                kbUploadLoading.value = false;
+            }
+        };
+
+        const searchKnowledge = async () => {
+            if (!kbSearchQuery.value.trim()) {
+                ElMessage.warning('请输入搜索关键词');
+                return;
+            }
+            kbSearchLoading.value = true;
+            try {
+                const res = await axios.get('/rag/search', {
+                    params: { q: kbSearchQuery.value, top_k: 5 }
+                });
+                if (res.data.code === 200) {
+                    kbSearchResults.value = res.data.data;
+                    if (kbSearchResults.value.length === 0) {
+                        ElMessage.info('未找到相关结果');
+                    }
+                } else {
+                    ElMessage.error(res.data.message || '搜索失败');
+                }
+            } catch (err) {
+                ElMessage.error('搜索请求失败：' + (err.response?.data?.message || err.message));
+            } finally {
+                kbSearchLoading.value = false;
+            }
+        };
+
+        const askKnowledge = async () => {
+            if (!kbCurrentQuestion.value.trim()) {
+                ElMessage.warning('请输入问题');
+                return;
+            }
+            const question = kbCurrentQuestion.value;
+            kbChatMessages.value.push({
+                id: Date.now(),
+                role: 'user',
+                content: question
+            });
+            kbCurrentQuestion.value = '';
+            kbChatLoading.value = true;
+
+            try {
+                // 调用 RAG 问答接口，LLM 会根据检索到的内容生成答案
+                const res = await axios.post('/rag/query', {
+                    question: question,
+                    top_k: 5
+                });
+
+                if (res.data.answer) {
+                    kbChatMessages.value.push({
+                        id: Date.now() + 1,
+                        role: 'ai',
+                        content: res.data.answer
+                    });
+                } else {
+                    kbChatMessages.value.push({
+                        id: Date.now() + 1,
+                        role: 'ai',
+                        content: '抱歉，未能获取到答案。请稍后重试。'
+                    });
+                }
+            } catch (err) {
+                kbChatMessages.value.push({
+                    id: Date.now() + 1,
+                    role: 'ai',
+                    content: '抱歉，查询知识库时出错：' + (err.response?.data?.detail || err.message)
+                });
+            } finally {
+                kbChatLoading.value = false;
+            }
+        };
+
         // ============================================
         // 监听器
         // ============================================
@@ -2290,7 +2540,11 @@ const app = createApp({
             openMaintenanceEditForm, submitMaintenanceUpdate, deleteQueriedExam, resetExamMaintenance,
             empSearch, employmentRecords, empLoading, loadEmploymentData,
             selectedEmployment, handleEmploymentSelection,
-            employmentDialogVisible, employmentForm, openEmploymentDialog, saveEmployment, deleteEmployment
+            employmentDialogVisible, employmentForm, openEmploymentDialog, saveEmployment, deleteEmployment,
+            // 知识库管理
+            kbUploadLoading, kbUploadCategory, kbCategories, handleKnowledgeUpload,
+            searchKnowledge, kbSearchQuery, kbSearchResults, kbSearchLoading,
+            askKnowledge, kbChatMessages, kbChatLoading, kbCurrentQuestion
         };
     }
 });

@@ -6,4 +6,3 @@ from .employment_controller import router as employment_router
 from .statistics_controller import router as statistics_router
 from .query_controller import router as query_router
 from .auth_controller import router as auth_router
-from .text2sql_controller import router as text2sql_router
