@@ -10,8 +10,12 @@
 - **考试管理** - 成绩录入与查询，支持分页展示
 - **就业管理** - 学生就业信息跟踪
 - **统计分析** - 年龄统计、班级男女比例、平均分排名、就业数据等
-- **智能问答** - 基于向量数据库的自然语言查询
+- **自然语言查询** - NL2SQL 自然语言转 SQL 查询，支持对话上下文
+- **智能 Agent** - 多模型路由、意图分类、工具调用（天气/时间）、角色扮演
+- **RAG 知识库** - 文档上传、向量检索、智能问答
+- **用户认证** - JWT 认证系统
 - **日志系统** - 完整的请求日志记录与异常追踪
+- **安全验证** - SQL 验证、输入校验、敏感信息脱敏
 
 ## 技术栈
 
@@ -21,7 +25,12 @@
 | FastAPI | Web 框架 |
 | SQLAlchemy | ORM |
 | MySQL | 数据库 |
-| ChromaDB | 向量数据库（知识库） |
+| ChromaDB | 本地向量数据库 |
+| Milvus | 分布式向量数据库 |
+| LangChain | AI 应用框架 |
+| Kimi (Moonshot) | NL2SQL / 闲聊 |
+| DeepSeek | 代码生成 / 数学 |
+| Qwen (通义千问) | 知识库问答 |
 | Element Plus | 前端 UI |
 
 ## 项目结构
@@ -29,22 +38,31 @@
 ```
 wolin-student/
 ├── controllers/           # API 控制器层
-│   ├── student_controller.py
-│   ├── class_controller.py
-│   ├── teacher_controller.py
-│   ├── exam_controller.py
-│   ├── employment_controller.py
-│   ├── statistics_controller.py
-│   ├── query_controller.py
-│   ├── auth_controller.py
-│   └── text2sql_controller.py
+│   ├── student_controller.py    # 学生管理
+│   ├── class_controller.py      # 班级管理
+│   ├── teacher_controller.py     # 教师管理
+│   ├── exam_controller.py       # 考试管理
+│   ├── employment_controller.py  # 就业管理
+│   ├── statistics_controller.py  # 统计分析
+│   ├── query_controller.py       # NL2SQL 自然语言查询
+│   ├── auth_controller.py        # 用户认证
+│   ├── rag_router.py            # RAG 知识库路由
+│   └── agent_router.py          # 智能 Agent 路由
 ├── services/              # 业务逻辑层
+│   ├── agent_service.py          # 智能 Agent 服务（多模型路由）
+│   ├── rag_complete.py           # RAG 问答服务（文档处理/向量检索）
+│   ├── conversation_service.py   # 对话历史管理
+│   └── ...
 ├── model/                 # 数据库模型
+│   ├── user.py                  # 用户模型
+│   └── conversation.py          # 对话记忆模型
 ├── schemas/               # Pydantic 数据模型
 ├── utils/                 # 工具模块
-│   └── logger.py          # 日志配置
+│   ├── logger.py               # 日志配置
+│   └── security.py             # 安全工具（SQL验证/输入校验/脱敏）
 ├── static/
 │   └── index.html         # 前端页面
+├── chroma_db/             # Chroma 向量数据库
 ├── docs/                  # 项目文档
 ├── database.py            # 数据库配置
 ├── main.py                # 应用入口
@@ -122,6 +140,35 @@ python main.py
 | GET | `/statistics/score/fail-list` | 不及格学生名单 |
 | GET | `/statistics/dashboard/all` | 数据总览仪表盘 |
 
+### 自然语言查询 (NL2SQL)
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| POST | `/query/natural` | 自然语言查询，支持意图分类和对话上下文 |
+
+### RAG 知识库
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| POST | `/rag/upload` | 上传文档到知识库（支持 txt/pdf/docx） |
+| POST | `/rag/query` | RAG 问答（流式输出） |
+| GET | `/rag/search` | 文档检索 |
+| GET | `/rag/stats` | 知识库统计 |
+| DELETE | `/rag/clear` | 清空知识库 |
+
+### 智能 Agent
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| POST | `/agent/chat` | 智能对话（多模型路由） |
+| GET | `/agent/models` | 列出可用模型 |
+| GET | `/agent/route` | 查看路由决策 |
+| GET | `/agent/tools` | 列出可用工具 |
+| POST | `/agent/tools/test` | 测试工具调用 |
+
+### 用户认证
+| 方法 | 端点 | 说明 |
+|------|------|------|
+| POST | `/auth/login` | 用户登录 |
+| POST | `/auth/register` | 用户注册 |
+
 ## 数据库表结构
 
 - **teacher** - 教师表（ID、姓名、性别、电话、角色）
@@ -130,6 +177,8 @@ python main.py
 - **stu_exam_record** - 成绩表（学号、考核序次、成绩、日期）
 - **employment** - 就业表（学生、公司、薪资、offer时间等）
 - **class_teacher** - 班级教师关联表
+- **user** - 用户表（用户名、密码哈希、角色）
+- **conversation_memory** - 对话记忆表（会话ID、轮次、问题、SQL、结果）
 
 ## 日志说明
 
@@ -149,6 +198,19 @@ python main.py
 | 变量 | 默认值 | 说明 |
 |------|--------|------|
 | LOG_LEVEL | INFO | 日志级别 |
+| DASHSCOPE_API_KEY | - | 阿里云 DashScope API Key（知识库向量化） |
+| KIMI_API_KEY | - | Moonshot Kimi API Key（NL2SQL/闲聊） |
+| DEEPSEEK_API_KEY | - | DeepSeek API Key（代码/数学） |
+| OPENAI_API_KEY | - | OpenAI API Key（复杂推理） |
+| MILVUS_HOST | 192.168.184.128 | Milvus 向量数据库地址 |
+| MILVUS_PORT | 19530 | Milvus 端口 |
+
+## 安全特性
+
+- **SQL 验证器** - 防止 SQL 注入，只允许 SELECT 查询
+- **输入校验** - 用户名、密码、手机号等输入验证
+- **敏感信息脱敏** - 日志中自动过滤敏感关键词
+- **统一异常处理** - 标准化的错误响应格式
 
 ## 许可证
 
