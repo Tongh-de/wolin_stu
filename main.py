@@ -40,7 +40,7 @@ from controllers import (
     auth_router
 )
 from controllers.rag_router import router as rag_router
-from controllers.agent_router import router as agent_router
+from services.agent_service import router as agent_router
 from utils.logger import app_logger
 
 # Lifespan 事件处理

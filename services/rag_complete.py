@@ -26,11 +26,11 @@ router = APIRouter(
     tags=["RAG智能问答"])
 
 # ============================================
-# 配置
+# 配置 (从环境变量读取)
 # ============================================
-MILVUS_HOST = "192.168.184.128"
-MILVUS_PORT = 19530  # 必须是整数
-COLLECTION_NAME = "rag_knowledge"
+MILVUS_HOST = os.getenv("MILVUS_HOST", "localhost")
+MILVUS_PORT = int(os.getenv("MILVUS_PORT", "19530"))  # 必须是整数
+COLLECTION_NAME = os.getenv("RAG_COLLECTION_NAME", "rag_knowledge")
 
 # LLM 配置 (Moonshot Kimi)
 LLM_API_KEY = os.getenv("KIMI_API_KEY")
