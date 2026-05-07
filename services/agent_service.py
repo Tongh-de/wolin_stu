@@ -11,10 +11,14 @@ from typing import Optional, List, Literal, Callable, Any
 import os
 import asyncio
 import json
+import re
 import httpx
 from datetime import datetime, timezone, timedelta
 from openai import AsyncOpenAI
 from dotenv import load_dotenv
+from sqlalchemy.orm import Session
+from sqlalchemy import text
+from database import get_db
 
 
 # 北京时区 (UTC+8)
@@ -23,6 +27,98 @@ BEIJING_TZ = timezone(timedelta(hours=8))
 load_dotenv()
 
 router = APIRouter(prefix="/agent", tags=["智能Agent"])
+
+# ============================================
+# NL2SQL 辅助函数（复用 query_controller 逻辑）
+# ============================================
+
+FALLBACK_SCHEMA = """
+数据库表结构：
+- teacher: teacher_id, teacher_name, gender, phone, role, is_deleted
+- class: class_id, class_name, start_time, head_teacher_id, is_deleted
+- stu_basic_info: stu_id, stu_name, native_place, graduated_school, major, admission_date, graduation_date, education, age, gender, advisor_id, class_id, is_deleted
+- stu_exam_record: stu_id, seq_no, grade, exam_date, is_deleted
+- employment: emp_id, stu_id, stu_name, class_id, open_time, offer_time, company, salary, is_deleted
+"""
+
+
+def fix_table_names(sql: str) -> str:
+    """修正表名"""
+    sql = re.sub(r'\bteachers\b', 'teacher', sql, flags=re.IGNORECASE)
+    sql = re.sub(r'\bstudents\b', 'stu_basic_info', sql, flags=re.IGNORECASE)
+    sql = re.sub(r'\bcourses\b', 'class', sql, flags=re.IGNORECASE)
+    return sql
+
+
+# Kimi 客户端（用于 NL2SQL）
+_nl2sql_client = None
+
+
+def get_nl2sql_client():
+    global _nl2sql_client
+    if _nl2sql_client is None:
+        api_key = os.getenv("KIMI_API_KEY")
+        if not api_key:
+            raise ValueError("未设置 KIMI_API_KEY")
+        _nl2sql_client = AsyncOpenAI(
+            api_key=api_key,
+            base_url="https://api.moonshot.cn/v1",
+            timeout=60.0
+        )
+    return _nl2sql_client
+
+
+async def retrieve_schema_context() -> str:
+    """获取数据库结构（简化版，不依赖向量库）"""
+    return FALLBACK_SCHEMA
+
+
+async def generate_sql(question: str) -> str:
+    """根据问题生成 SQL"""
+    client = get_nl2sql_client()
+    schema = await retrieve_schema_context()
+
+    system_prompt = """你是一个MySQL专家，只输出SQL语句。
+
+重要规则：
+1. 查询学生成绩时，必须同时关联 stu_basic_info 和 stu_exam_record 两个表
+2. 表名使用单数形式：stu_basic_info, stu_exam_record, class, teacher, employment
+3. 必须添加 WHERE is_deleted = 0 过滤已删除数据
+4. 学生姓名在 stu_basic_info.stu_name 字段，成绩在 stu_exam_record.grade 字段
+5. 两个表通过 stu_id 关联：ON stu_basic_info.stu_id = stu_exam_record.stu_id"""
+
+    user_prompt = f"""数据库结构：
+{schema}
+
+问题：{question}
+
+输出SQL（只输出SQL语句，不要其他内容）："""
+
+    resp = await client.chat.completions.create(
+        model="moonshot-v1-8k",
+        messages=[
+            {"role": "system", "content": system_prompt},
+            {"role": "user", "content": user_prompt}
+        ],
+        temperature=0.1,
+        max_tokens=500
+    )
+
+    sql = resp.choices[0].message.content.strip()
+    sql = re.sub(r'^```sql\s*', '', sql)
+    sql = re.sub(r'\s*```$', '', sql)
+    return fix_table_names(sql)
+
+
+async def execute_sql_to_dict(db: Session, sql: str) -> List[dict]:
+    """执行 SQL 并返回字典列表"""
+    def _sync():
+        result = db.execute(text(sql))
+        rows = result.fetchall()
+        if not rows:
+            return []
+        return [dict(zip(result.keys(), row)) for row in rows]
+    return await asyncio.to_thread(_sync)
 
 # ============================================
 # 模型配置
@@ -142,6 +238,32 @@ TOOLS_SCHEMA = [
                 }
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_student_data",
+            "description": """查询学生管理系统数据库，获取学生信息、成绩记录、就业情况、班级信息、教师信息等。
+当用户询问以下类型问题时必须使用此工具：
+- 查询学生信息（有多少学生、某个学生信息等）
+- 查询成绩（成绩排名、最高分、最低分、平均分、某学生成绩等）
+- 查询班级信息（班级列表、班级人数等）
+- 查询教师信息（老师名单、某个老师信息等）
+- 查询就业信息（就业率、就业公司等）
+- 任何涉及数据库数据的统计和分析问题
+
+输入自然语言问题，返回查询结果。""",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "用户的自然语言查询问题，例如：'查询所有学生的成绩'、'有多少男生'、'平均分是多少'"
+                    }
+                },
+                "required": ["question"]
+            }
+        }
     }
 ]
 
@@ -201,10 +323,56 @@ async def get_current_time(format: str = "full") -> str:
         return now.strftime("%Y-%m-%d %H:%M:%S")
 
 
+async def query_student_data(question: str) -> str:
+    """
+    查询学生管理系统数据库
+    核心逻辑：意图分类 → 生成 SQL → 执行查询
+    """
+    db = next(get_db())
+    try:
+        # 1. 生成 SQL
+        sql = await generate_sql(question)
+        print(f"[DEBUG] 生成的SQL: {sql}")  # 调试日志
+
+        # 2. 安全检查：只允许 SELECT
+        if not sql.strip().lower().startswith("select"):
+            return "错误：只支持查询操作（SELECT）"
+
+        # 3. 执行查询
+        data = await execute_sql_to_dict(db, sql)
+        print(f"[DEBUG] 查询结果: {len(data)} 条记录")  # 调试日志
+        row_count = len(data)
+
+        if row_count == 0:
+            return "查询结果为空，没有找到匹配的数据。"
+
+        # 4. 返回结果（限制返回条数避免 context 过长）
+        max_sample = 10
+        sample = data[:max_sample]
+
+        if row_count <= max_sample:
+            return f"查询成功，共 {row_count} 条记录：\n{json.dumps(sample, ensure_ascii=False, default=str, indent=2)}"
+        else:
+            return f"查询成功，共 {row_count} 条记录（显示前 {max_sample} 条）：\n{json.dumps(sample, ensure_ascii=False, default=str, indent=2)}\n\n如需查看完整数据，请缩小查询范围。"
+
+    except Exception as e:
+        # SQL 失败时返回错误信息
+        error_msg = str(e)
+        if "Unknown column" in error_msg or "doesn't exist" in error_msg:
+            return f"查询失败：字段或表名错误，请重新描述问题。错误信息：{error_msg}"
+        elif "syntax" in error_msg.lower():
+            return f"查询失败：SQL语法错误，请重新描述问题。"
+        else:
+            return f"查询失败：{error_msg}"
+    finally:
+        db.close()
+
+
 # 工具注册表
 TOOL_FUNCTIONS: dict[str, Callable] = {
     "get_weather": get_weather,
-    "get_current_time": get_current_time
+    "get_current_time": get_current_time,
+    "query_student_data": query_student_data
 }
 
 
@@ -254,9 +422,10 @@ async def classify_intent(question: str) -> tuple[str, str]:
         (["林黛玉", "黛玉", "红楼梦"],
          "lindaidai", "林黛玉角色扮演"),
 
-        # NL2SQL
+        # NL2SQL（查询数据库）
         (["有多少", "几个", "查询", "统计", "排名", "最高", "最低", "平均",
-          "学生", "班级", "老师", "成绩", "就业"], "nl2sql", "包含数据库查询关键词"),
+          "学生", "班级", "老师", "成绩", "就业", "人数", "列表", "所有人"],
+         "nl2sql", "包含数据库查询关键词"),
 
         # 代码
         (["写代码", "代码", "python", "javascript", "函数", "class", "def"],
@@ -301,7 +470,7 @@ async def classify_intent(question: str) -> tuple[str, str]:
 # ============================================
 
 # 需要使用工具的意图
-TOOL_INTENTS = ["weather", "time", "lindaidai"]
+TOOL_INTENTS = ["weather", "time", "lindaidai", "nl2sql", "analysis"]
 
 
 def select_model(intent: str, force_model: Optional[str] = None) -> tuple[dict, str]:
@@ -421,7 +590,7 @@ async def call_llm_with_tools(client: AsyncOpenAI, model: str, messages: list,
 
 
 # ============================================
-# Agent 主逻辑
+# Agent 主逻辑（非流式）
 # ============================================
 async def run_agent(question: str, context: Optional[List[dict]] = None, persona: Optional[str] = None) -> dict:
     """运行 Agent 处理请求"""
@@ -444,11 +613,15 @@ async def run_agent(question: str, context: Optional[List[dict]] = None, persona
 
     # 3. 构建消息
     system_prompts = {
-        "nl2sql": """你是一个MySQL专家，根据用户问题生成SQL查询。
-规则：
-1. 只生成 SELECT 语句
-2. 必须添加 WHERE is_deleted = 0
-3. 表名使用单数形式""",
+        "nl2sql": """你是一个学生信息管理系统的智能助手，可以通过查询数据库获取学生、成绩、班级、就业等信息。
+
+当用户询问以下问题时，必须使用 query_student_data 工具查询数据库：
+- "有多少学生"、"班级列表"、"成绩排名"
+- "某个学生的信息"、"平均分"、"最高分"
+- "就业率"、"就业公司"、"薪资情况"
+- 任何涉及数据统计和分析的问题
+
+使用工具后，根据查询结果回答用户问题。""",
 
         "code": """你是一个专业程序员，根据用户需求生成代码。
 规则：
@@ -556,22 +729,6 @@ async def run_agent(question: str, context: Optional[List[dict]] = None, persona
 # ============================================
 # API 路由
 # ============================================
-@router.post("/chat", response_model=AgentResponse)
-async def agent_chat(request: AgentRequest):
-    """
-    智能对话接口
-    根据问题类型自动选择最合适的模型
-    """
-    import uuid
-    
-    session_id = request.session_id or str(uuid.uuid4())
-    
-    result = await run_agent(request.question, request.context, request.persona)
-    result["session_id"] = session_id
-    
-    return result
-
-
 @router.get("/models", response_model=List[ModelInfo])
 async def list_models():
     """列出所有可用模型"""
@@ -655,3 +812,180 @@ async def test_tool(tool_name: str, params: dict = {}):
             "code": 500,
             "message": f"工具调用失败: {str(e)}"
         }
+
+
+# ============================================
+# 流式对话 API
+# ============================================
+@router.post("/chat")
+async def agent_chat_stream(request: AgentRequest):
+    """
+    智能对话接口 - 流式输出
+    根据问题类型自动选择最合适的模型，逐字返回响应
+    """
+    import uuid
+    import time
+
+    session_id = request.session_id or str(uuid.uuid4())
+    start_time = time.time()
+
+    async def stream_generate():
+        try:
+            # 1. 意图分类
+            intent, intent_reason = await classify_intent(request.question)
+
+            # 如果启用了角色人格
+            if request.persona == "lindaidai":
+                intent = "lindaidai"
+                intent_reason = "用户启用了林黛玉人格"
+            elif request.persona:
+                intent = request.persona
+
+            # 2. 模型选择
+            model_config, model_reason = select_model(intent)
+
+            # 3. 构建消息
+            system_prompts = {
+                "nl2sql": """你是一个学生信息管理系统的智能助手，可以通过查询数据库获取学生、成绩、班级、就业等信息。
+
+当用户询问以下问题时，必须使用 query_student_data 工具查询数据库：
+- "有多少学生"、"班级列表"、"成绩排名"
+- "某个学生的信息"、"平均分"、"最高分"
+- "就业率"、"就业公司"、"薪资情况"
+- 任何涉及数据统计和分析的问题
+
+使用工具后，根据查询结果回答用户问题。""",
+
+                "code": """你是一个专业程序员，根据用户需求生成代码。
+规则：
+1. 代码简洁规范
+2. 添加必要注释
+3. 考虑边界情况""",
+
+                "math": """你是一个数学专家，精确计算并给出答案。
+规则：
+1. 列出计算步骤
+2. 最终给出精确答案""",
+
+                "rag": """你是一个知识库问答助手，根据提供的内容回答问题。""",
+
+                "analysis": """你是一个数据分析专家，可以分析学生管理系统的数据。
+
+当用户要求分析数据时：
+1. 如果需要新的数据，先用 query_student_data 查询
+2. 根据查询结果分析数据趋势和原因
+3. 用通俗易懂的语言解释数据""",
+
+                "weather": """你是一个天气助手，当用户询问天气时，使用 get_weather 工具获取实时天气信息。
+用户询问天气时，必须调用工具获取最新数据，不要编造天气信息。""",
+
+                "time": """你是一个时间助手，当用户询问时间时，使用 get_current_time 工具获取准确时间。
+用户询问时间时，必须调用工具获取当前时间。""",
+
+                "chat": """你是一个友好的AI助手，简洁回答用户问题。""",
+
+                "lindaidai": """【角色设定】你是林黛玉，来自《红楼梦》，才情横溢、多愁善感、体弱多病、言语犀利但内心善良。
+
+【性格特点】
+1. 说话常带诗意，善用典故
+2. 敏感细腻，容易感伤
+3. 言语中带点讽刺但不失温柔
+4. 常常自怜"风刀霜剑严相逼"
+5. 对宝玉有深厚感情但口是心非
+
+【语言风格】
+- 常用"那也未可知""偏又""大约""竟"等语气词
+- 说话带点讽刺但不失礼貌
+- 时常叹息、流泪、自怜
+- 用典雅的语言表达情感
+
+【行为规范】
+1. 回答时体现林黛玉的性格特点
+2. 可以适当引用《红楼梦》中的典故
+3. 遇到宝玉相关话题会特别敏感
+4. 谈论花草、诗词、月亮等话题时更有感触
+5. 可以调用get_current_time获取时间，但要以黛玉的口吻回应""",
+
+                "general": """你是一个智能助手，准确回答用户问题。
+当用户询问天气或时间时，可以使用相应工具获取准确信息。"""
+            }
+
+            system_prompt = system_prompts.get(intent, system_prompts["general"])
+            messages = [{"role": "system", "content": system_prompt}]
+
+            # 添加对话历史
+            if request.context:
+                for c in request.context:
+                    role = c.get("role", "user")
+                    content = c.get("content", "")
+                    if role in ["user", "assistant"]:
+                        messages.append({"role": role, "content": content})
+
+            # 添加当前问题
+            messages.append({"role": "user", "content": request.question})
+
+            # 4. 发送元数据
+            latency = (time.time() - start_time) * 1000
+            yield f"data: {json.dumps({
+                'type': 'meta',
+                'session_id': session_id,
+                'model_used': model_config["name"],
+                'provider': model_config["provider"],
+                'intent': intent,
+                'intent_reason': intent_reason,
+                'model_reason': model_reason,
+                'tools_used': intent in TOOL_INTENTS,
+                'start_time_ms': round(latency, 2)
+            }, ensure_ascii=False)}\n\n"
+
+            # 5. 流式调用 LLM
+            use_tools = intent in TOOL_INTENTS
+            client = get_client(model_config["provider"], model_config)
+
+            if use_tools:
+                # 工具调用模式：先完整调用（保持兼容性）
+                answer = await call_llm_with_tools(
+                    client, model_config["name"], messages,
+                    temperature=0.7, max_tokens=2000
+                )
+                # 一次性返回工具调用结果
+                yield f"data: {json.dumps({'type': 'answer', 'content': answer}, ensure_ascii=False)}\n\n"
+            else:
+                # 流式输出模式
+                stream = await client.chat.completions.create(
+                    model=model_config["name"],
+                    messages=messages,
+                    temperature=0.7,
+                    max_tokens=2000,
+                    stream=True
+                )
+
+                async for chunk in stream:
+                    if chunk.choices[0].delta.content:
+                        yield f"data: {json.dumps({
+                            'type': 'answer',
+                            'content': chunk.choices[0].delta.content
+                        }, ensure_ascii=False)}\n\n"
+
+            # 6. 发送完成标记
+            total_time = (time.time() - start_time) * 1000
+            yield f"data: {json.dumps({
+                'type': 'done',
+                'total_time_ms': round(total_time, 2)
+            }, ensure_ascii=False)}\n\n"
+
+        except Exception as e:
+            yield f"data: {json.dumps({
+                'type': 'error',
+                'content': f"处理失败: {str(e)}"
+            }, ensure_ascii=False)}\n\n"
+
+    return StreamingResponse(
+        stream_generate(),
+        media_type="text/event-stream",
+        headers={
+            "Cache-Control": "no-cache",
+            "Connection": "keep-alive",
+            "X-Accel-Buffering": "no",
+        }
+    )

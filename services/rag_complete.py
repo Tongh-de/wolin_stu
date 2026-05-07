@@ -49,9 +49,12 @@ def get_embeddings():
     """懒加载嵌入模型（使用本地 HuggingFace 模型）"""
     global _embeddings
     if _embeddings is None:
-        from langchain_community.embeddings import HuggingFaceBgeEmbeddings
+        try:
+            from langchain_huggingface import HuggingFaceEmbeddings
+        except ImportError:
+            from langchain_community.embeddings import HuggingFaceBgeEmbeddings as HuggingFaceEmbeddings
         print(f"[RAG] 正在加载本地嵌入模型 BAAI/bge-m3...")
-        _embeddings = HuggingFaceBgeEmbeddings(
+        _embeddings = HuggingFaceEmbeddings(
             model_name="BAAI/bge-m3",
             model_kwargs={'device': 'cpu'},
             encode_kwargs={'normalize_embeddings': True}

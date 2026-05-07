@@ -391,7 +391,7 @@ create table wolin_test1.conversation_memory
 	full_data_saved tinyint(1) null comment '是否完整保存了查询结果数据（True=完整，False=仅摘要）',
 	aggregate_sql text null comment '数据分析分支自动生成的聚合SQL（仅当需要聚合时）',
 	embedding_vector json null comment '问题的向量表示（预留）',
-	created_at datetime default 'now()' null comment '记录创建时间'
+	created_at datetime default CURRENT_TIMESTAMP null comment '记录创建时间'
 );
 
 -- ============================================

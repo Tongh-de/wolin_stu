@@ -177,38 +177,332 @@
         .stat-icon.rose { background: #ffe4e6; color: #e11d48; }
         
         /* ============================================
-           表格样式美化
+           RAG 智能问答容器
            ============================================ */
-        .data-table {
+        .rag-container {
+            display: flex;
+            gap: 20px;
+            height: 580px;
+        }
+        .rag-chat-area {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
             background: #ffffff;
             border-radius: 16px;
             overflow: hidden;
             box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
             border: 1px solid #f1f5f9;
         }
-        .el-table {
-            --el-table-border-color: #f1f5f9;
-            --el-table-header-bg-color: #f8fafc;
-            border-radius: 16px;
+        .rag-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 16px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
         }
-        .el-table th.el-table__cell {
-            background-color: #f8fafc !important;
-            color: #475569 !important;
+        .rag-header h3 {
+            margin: 0;
+            font-size: 16px;
             font-weight: 600;
-            font-size: 14px;
-            padding: 16px 0;
-            border-bottom: 2px solid #e2e8f0 !important;
         }
-        .el-table td.el-table__cell {
-            padding: 16px 0;
-            border-bottom: 1px solid #f1f5f9 !important;
+        .rag-header .clear-btn {
+            background: rgba(255,255,255,0.2);
+            border: none;
+            color: white;
+            padding: 6px 10px;
+            border-radius: 8px;
+            cursor: pointer;
+            transition: background 0.3s;
+        }
+        .rag-header .clear-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+
+        /* 聊天消息区域 */
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+            background: #f8fafc;
+        }
+        .chat-messages::-webkit-scrollbar {
+            width: 6px;
+        }
+        .chat-messages::-webkit-scrollbar-thumb {
+            background: #cbd5e1;
+            border-radius: 3px;
+        }
+
+        /* 欢迎消息 */
+        .welcome-message {
+            text-align: center;
+            padding: 40px 20px;
+            color: #64748b;
+        }
+        .welcome-icon {
+            width: 64px;
+            height: 64px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 16px;
+        }
+        .welcome-icon i {
+            font-size: 28px;
+            color: white;
+        }
+        .welcome-message h4 {
+            margin: 0 0 8px;
+            font-size: 18px;
             color: #334155;
         }
-        .el-table tr:hover > td {
-            background-color: #f0f7ff !important;
+        .welcome-message p {
+            margin: 0 0 20px;
+            font-size: 14px;
         }
-        .el-table--striped .el-table__body tr.el-table__row--striped td.el-table__cell {
-            background-color: #fafbfc !important;
+        .quick-questions {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
+        .quick-label {
+            font-size: 13px;
+            color: #94a3b8;
+        }
+        .quick-btn {
+            background: white;
+            border: 1px solid #e2e8f0;
+            padding: 8px 16px;
+            border-radius: 20px;
+            font-size: 13px;
+            color: #475569;
+            cursor: pointer;
+            transition: all 0.3s;
+        }
+        .quick-btn:hover {
+            background: #667eea;
+            color: white;
+            border-color: #667eea;
+        }
+
+        /* 消息样式 */
+        .message-wrapper {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 16px;
+            animation: fadeIn 0.3s ease;
+        }
+        @keyframes fadeIn {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .user-message {
+            flex-direction: row-reverse;
+        }
+        .message-content {
+            max-width: 75%;
+            padding: 12px 16px;
+            border-radius: 16px;
+            line-height: 1.6;
+            font-size: 14px;
+        }
+        .user-message .message-content {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border-bottom-right-radius: 4px;
+        }
+        .ai-message .message-content {
+            background: white;
+            border: 1px solid #e2e8f0;
+            color: #334155;
+            border-bottom-left-radius: 4px;
+        }
+        .message-content p {
+            margin: 0;
+            white-space: pre-wrap;
+            word-break: break-word;
+        }
+        .avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+        }
+        .user-avatar {
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+        }
+        .ai-avatar {
+            background: #f1f5f9;
+            color: #667eea;
+        }
+
+        /* 打字动画 */
+        .typing-indicator {
+            display: flex;
+            gap: 4px;
+            padding: 4px 0;
+        }
+        .typing-indicator span {
+            width: 8px;
+            height: 8px;
+            background: #94a3b8;
+            border-radius: 50%;
+            animation: bounce 1.4s infinite ease-in-out;
+        }
+        .typing-indicator span:nth-child(1) { animation-delay: 0s; }
+        .typing-indicator span:nth-child(2) { animation-delay: 0.2s; }
+        .typing-indicator span:nth-child(3) { animation-delay: 0.4s; }
+        @keyframes bounce {
+            0%, 80%, 100% { transform: translateY(0); }
+            40% { transform: translateY(-8px); }
+        }
+        
+        /* 代码块样式 */
+        .code-block {
+            background: #1e293b;
+            color: #e2e8f0;
+            padding: 12px 16px;
+            border-radius: 8px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 13px;
+            overflow-x: auto;
+            margin: 8px 0;
+            line-height: 1.5;
+        }
+        .code-block code {
+            background: none;
+            padding: 0;
+            color: inherit;
+        }
+        .inline-code {
+            background: #f1f5f9;
+            color: #7c3aed;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-family: 'Monaco', 'Menlo', 'Ubuntu Mono', monospace;
+            font-size: 0.9em;
+        }
+
+        /* 输入区域 */
+        .chat-input-area {
+            padding: 16px 20px;
+            background: white;
+            border-top: 1px solid #f1f5f9;
+        }
+        .input-wrapper {
+            display: flex;
+            gap: 12px;
+            align-items: center;
+        }
+        .input-wrapper input {
+            flex: 1;
+            padding: 12px 16px;
+            border: 2px solid #e2e8f0;
+            border-radius: 24px;
+            font-size: 14px;
+            outline: none;
+            transition: border-color 0.3s;
+        }
+        .input-wrapper input:focus {
+            border-color: #667eea;
+        }
+        .input-wrapper input:disabled {
+            background: #f8fafc;
+            cursor: not-allowed;
+        }
+        .send-btn {
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: none;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+        .send-btn:hover:not(:disabled) {
+            transform: scale(1.05);
+            box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+        }
+        .send-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* 右侧边栏 */
+        .rag-sidebar {
+            width: 240px;
+            background: white;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
+            border: 1px solid #f1f5f9;
+            display: flex;
+            flex-direction: column;
+        }
+        .sidebar-header {
+            padding: 16px 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            font-weight: 600;
+            font-size: 14px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+        .sidebar-content {
+            padding: 20px;
+            flex: 1;
+        }
+        .stat-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #f1f5f9;
+        }
+        .stat-item:last-child {
+            border-bottom: none;
+        }
+        .stat-label {
+            color: #64748b;
+            font-size: 13px;
+        }
+        .stat-value {
+            font-weight: 600;
+            color: #334155;
+            font-size: 13px;
+        }
+        .stat-value.success {
+            color: #10b981;
+        }
+        .sidebar-tip {
+            padding: 16px;
+            background: #f8fafc;
+            border-top: 1px solid #f1f5f9;
+        }
+        .sidebar-tip i {
+            color: #667eea;
+            margin-right: 8px;
+        }
+        .sidebar-tip p {
+            margin: 0;
+            font-size: 12px;
+            color: #64748b;
+            line-height: 1.6;
         }
         
         /* ============================================
@@ -773,11 +1067,11 @@
             
             <!-- 表单 -->
             <div class="space-y-4">
-                <input type="text" v-model="authUsername" placeholder="请输入用户名" class="login-input" @keyup.enter="submitAuth">
-                <input type="password" v-model="authPassword" placeholder="请输入密码" class="login-input" @keyup.enter="submitAuth">
-                <button @click="submitAuth" class="login-btn">
-                    <i class="fas" :class="authMode === 'login' ? 'fa-sign-in-alt' : 'fa-user-plus'"></i>
-                    {{ authMode === 'login' ? '登 录' : '注 册' }}
+                <input type="text" v-model="authUsername" placeholder="请输入用户名" class="login-input" @keyup.enter="submitAuth" :disabled="authLoading">
+                <input type="password" v-model="authPassword" placeholder="请输入密码" class="login-input" @keyup.enter="submitAuth" :disabled="authLoading">
+                <button @click="submitAuth" class="login-btn" :disabled="authLoading">
+                    <span v-if="authLoading"><i class="fas fa-spinner fa-spin"></i> 处理中...</span>
+                    <span v-else><i class="fas" :class="authMode === 'login' ? 'fa-sign-in-alt' : 'fa-user-plus'"></i> {{ authMode === 'login' ? '登 录' : '注 册' }}</span>
                 </button>
             </div>
             
@@ -962,8 +1256,93 @@
                 </div>
 
                 <!-- ========== 基础查询 ========== -->
-                <div v-if="activeTab === 'query'" class="h-[calc(100vh-160px)] px-0">
-                    <div class="chat-container h-full rounded-none border-0">
+                <div v-if="activeTab === 'query'" class="h-[calc(100vh-160px)] flex gap-4 px-0">
+                    <!-- 左侧数据面板 -->
+                    <div class="w-72 flex-shrink-0 bg-white rounded-xl shadow-sm p-4 overflow-y-auto">
+                        <h3 class="font-semibold text-gray-700 mb-4 flex items-center gap-2">
+                            <i class="fas fa-database text-blue-500"></i>可查询数据
+                        </h3>
+                        
+                        <!-- 数据类型 -->
+                        <div class="space-y-2 mb-6">
+                            <div class="text-xs text-gray-400 mb-2">数据类型</div>
+                            <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition">
+                                <div class="w-8 h-8 rounded-lg bg-blue-100 flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-user-graduate text-blue-500 text-sm"></i>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-medium text-gray-700">学生信息</p>
+                                    <p class="text-xs text-gray-400">基本信息、班级等</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition">
+                                <div class="w-8 h-8 rounded-lg bg-green-100 flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-school text-green-500 text-sm"></i>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-medium text-gray-700">班级信息</p>
+                                    <p class="text-xs text-gray-400">班级详情、班主任</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition">
+                                <div class="w-8 h-8 rounded-lg bg-amber-100 flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-chart-line text-amber-500 text-sm"></i>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-medium text-gray-700">成绩数据</p>
+                                    <p class="text-xs text-gray-400">各科成绩、排名</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition">
+                                <div class="w-8 h-8 rounded-lg bg-purple-100 flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-briefcase text-purple-500 text-sm"></i>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-medium text-gray-700">就业信息</p>
+                                    <p class="text-xs text-gray-400">薪资、公司统计</p>
+                                </div>
+                            </div>
+                            <div class="flex items-center gap-3 p-2 rounded-lg hover:bg-gray-50 transition">
+                                <div class="w-8 h-8 rounded-lg bg-red-100 flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-chalkboard-teacher text-red-500 text-sm"></i>
+                                </div>
+                                <div>
+                                    <p class="text-sm font-medium text-gray-700">教师信息</p>
+                                    <p class="text-xs text-gray-400">教师信息查询</p>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- 快捷查询 -->
+                        <div class="mt-6">
+                            <div class="text-xs text-gray-400 mb-3 flex items-center gap-1">
+                                <i class="fas fa-bolt text-amber-400"></i>快捷查询
+                            </div>
+                            <div class="space-y-2">
+                                <button @click="currentQuestion='学生总共有多少人？'; sendQuestion()" class="w-full text-left px-3 py-2 text-sm bg-blue-50 hover:bg-blue-100 rounded-lg transition border border-blue-100 text-gray-600">
+                                    👥 学生总数
+                                </button>
+                                <button @click="currentQuestion='各班有多少学生？'; sendQuestion()" class="w-full text-left px-3 py-2 text-sm bg-green-50 hover:bg-green-100 rounded-lg transition border border-green-100 text-gray-600">
+                                    🏫 各班人数
+                                </button>
+                                <button @click="currentQuestion='各班的平均成绩是多少？'; sendQuestion()" class="w-full text-left px-3 py-2 text-sm bg-amber-50 hover:bg-amber-100 rounded-lg transition border border-amber-100 text-gray-600">
+                                    📊 平均成绩
+                                </button>
+                                <button @click="currentQuestion='就业率是多少？'; sendQuestion()" class="w-full text-left px-3 py-2 text-sm bg-purple-50 hover:bg-purple-100 rounded-lg transition border border-purple-100 text-gray-600">
+                                    💼 就业率
+                                </button>
+                                <button @click="currentQuestion='最高薪资是多少？'; sendQuestion()" class="w-full text-left px-3 py-2 text-sm bg-red-50 hover:bg-red-100 rounded-lg transition border border-red-100 text-gray-600">
+                                    💰 最高薪资
+                                </button>
+                                <button @click="currentQuestion='有多少老师？'; sendQuestion()" class="w-full text-left px-3 py-2 text-sm bg-gray-50 hover:bg-gray-100 rounded-lg transition border border-gray-100 text-gray-600">
+                                    👨‍🏫 老师数量
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                    
+                    <!-- 聊天主区域 -->
+                    <div class="flex-1 chat-container rounded-xl shadow-sm overflow-hidden">
                         <!-- 头部 -->
                         <div class="chat-header flex items-center gap-4">
                             <div class="chat-header-icon flex-shrink-0">
@@ -973,30 +1352,37 @@
                                 <h2 class="text-xl font-semibold">基础数据查询</h2>
                                 <p class="text-blue-200 text-sm opacity-90">用自然语言查询学生、班级、成绩、就业等数据</p>
                             </div>
+                            <button v-if="chatMessages.length > 1" @click="chatMessages = [{id: 1, role: 'ai', content: '您好！我是数据查询助手。请输入您想查询的问题'}]" class="px-3 py-1.5 text-sm bg-white/10 hover:bg-white/20 rounded-lg transition">
+                                <i class="fas fa-trash-alt mr-1"></i>清空
+                            </button>
                         </div>
                         
                         <!-- 消息区域 -->
                         <div class="flex-1 flex flex-col overflow-hidden">
                             <!-- 欢迎语 -->
                             <div v-if="chatMessages.length <= 1" class="flex-1 flex items-center justify-center p-8">
-                                <div class="text-center max-w-2xl">
+                                <div class="text-center max-w-md">
                                     <div class="chat-welcome-icon inline-flex mb-4">
                                         <i class="fas fa-database text-4xl"></i>
                                     </div>
-                                    <h3 class="text-xl font-semibold text-gray-700 mb-3">开始数据查询</h3>
-                                    <p class="text-gray-500 mb-6">试试这样问我：</p>
-                                    <div class="grid grid-cols-3 gap-4">
-                                        <div class="bg-white p-4 rounded-xl border border-gray-100 text-left hover:shadow-md transition cursor-pointer" @click="currentQuestion='学生总共有多少人？'; sendQuestion()">
-                                            <i class="fas fa-users text-blue-400 mb-2"></i>
-                                            <p class="text-sm text-gray-600">"学生总共有多少人？"</p>
+                                    <h3 class="text-xl font-semibold text-gray-700 mb-2">开始数据查询</h3>
+                                    <p class="text-gray-500 mb-6">输入您想查询的问题，AI将自动转换为SQL查询并返回结果</p>
+                                    <div class="grid grid-cols-2 gap-3">
+                                        <div class="bg-white p-3 rounded-xl border border-gray-100 text-left hover:shadow-md transition cursor-pointer" @click="currentQuestion='学生总共有多少人？'; sendQuestion()">
+                                            <i class="fas fa-users text-blue-400 mb-1"></i>
+                                            <p class="text-xs text-gray-600">"学生总数？"</p>
                                         </div>
-                                        <div class="bg-white p-4 rounded-xl border border-gray-100 text-left hover:shadow-md transition cursor-pointer" @click="currentQuestion='各班的平均成绩是多少？'; sendQuestion()">
-                                            <i class="fas fa-chart-bar text-green-400 mb-2"></i>
-                                            <p class="text-sm text-gray-600">"各班的平均成绩是多少？"</p>
+                                        <div class="bg-white p-3 rounded-xl border border-gray-100 text-left hover:shadow-md transition cursor-pointer" @click="currentQuestion='各班的平均成绩是多少？'; sendQuestion()">
+                                            <i class="fas fa-chart-bar text-green-400 mb-1"></i>
+                                            <p class="text-xs text-gray-600">"平均成绩？"</p>
                                         </div>
-                                        <div class="bg-white p-4 rounded-xl border border-gray-100 text-left hover:shadow-md transition cursor-pointer" @click="currentQuestion='就业学生的平均薪资？'; sendQuestion()">
-                                            <i class="fas fa-briefcase text-purple-400 mb-2"></i>
-                                            <p class="text-sm text-gray-600">"就业学生的平均薪资？"</p>
+                                        <div class="bg-white p-3 rounded-xl border border-gray-100 text-left hover:shadow-md transition cursor-pointer" @click="currentQuestion='就业学生的平均薪资？'; sendQuestion()">
+                                            <i class="fas fa-briefcase text-purple-400 mb-1"></i>
+                                            <p class="text-xs text-gray-600">"平均薪资？"</p>
+                                        </div>
+                                        <div class="bg-white p-3 rounded-xl border border-gray-100 text-left hover:shadow-md transition cursor-pointer" @click="currentQuestion='班级列表？'; sendQuestion()">
+                                            <i class="fas fa-school text-amber-400 mb-1"></i>
+                                            <p class="text-xs text-gray-600">"班级列表？"</p>
                                         </div>
                                     </div>
                                 </div>
@@ -1049,10 +1435,10 @@
                             </div>
                             
                             <!-- 输入框 -->
-                            <div class="chat-input-area border-t border-gray-200">
+                            <div class="chat-input-area border-t border-white/10">
                                 <div class="max-w-6xl mx-auto px-6">
                                     <div class="chat-input-box">
-                                        <input type="text" v-model="currentQuestion" @keyup.enter="sendQuestion" placeholder="输入问题，按回车发送...">
+                                        <input type="text" v-model="currentQuestion" @keyup.enter="sendQuestion" placeholder="输入问题，按回车发送..." :disabled="isLoading">
                                         <button @click="sendQuestion" class="chat-send-btn" :disabled="isLoading">
                                             <i class="fas fa-paper-plane"></i>
                                         </button>
@@ -1064,98 +1450,89 @@
                 </div>
 
                 <!-- ========== Agent助手 ========== -->
-                <div v-if="activeTab === 'agent'" class="h-[calc(100vh-160px)] px-0">
-                    <div class="chat-container h-full rounded-none border-0">
-                        <!-- 头部 -->
-                        <div class="chat-header flex items-center gap-4">
-                            <div class="chat-header-icon flex-shrink-0">
-                                <i class="fas fa-robot"></i>
+                <div v-if="activeTab === 'agent'" class="h-[calc(100vh-160px)] flex flex-col">
+                    <!-- 顶部工具栏 -->
+                    <div class="flex items-center justify-between mb-4 px-2">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center">
+                                <i class="fas fa-robot text-white text-xl"></i>
                             </div>
-                            <div class="flex-1">
-                                <h2 class="text-xl font-semibold">Agent 智能助手</h2>
-                                <p class="text-blue-200 text-sm opacity-90">支持天气查询、时间查询、林黛玉角色扮演等智能功能</p>
+                            <div>
+                                <h2 class="text-xl font-semibold text-gray-800">Agent 智能助手</h2>
+                                <p class="text-sm text-gray-500">{{ agentPersona === 'lindaidai' ? '林黛玉模式已开启' : '支持天气、时间、代码等多种功能' }}</p>
                             </div>
-                            <!-- 林黛玉人格开关 -->
-                            <div class="flex items-center gap-2 bg-white/10 rounded-full px-3 py-1.5">
-                                <span :class="['text-xs', agentPersona === 'lindaidai' ? 'text-red-200 font-medium' : 'text-blue-200']">林黛玉</span>
-                                <label class="relative inline-flex items-center cursor-pointer">
-                                    <input type="checkbox" class="sr-only peer" v-model="agentPersona" true-value="lindaidai" false-value="">
-                                    <div class="w-9 h-5 bg-white/20 peer-focus:ring-2 peer-focus:ring-white/50 rounded-full peer peer-checked:after:translate-x-full rtl:peer-checked:after:-translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-red-400"></div>
-                                </label>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <!-- 林黛玉开关 -->
+                            <label class="flex items-center gap-2 cursor-pointer bg-pink-50 hover:bg-pink-100 px-4 py-2 rounded-xl border border-pink-200 transition">
+                                <i class="fas fa-theater-masks text-red-500"></i>
+                                <span class="text-sm font-medium text-gray-700">林黛玉</span>
+                                <input type="checkbox" class="sr-only peer" v-model="agentPersona" true-value="lindaidai" false-value="">
+                                <div class="w-11 h-6 bg-gray-200 peer-checked:bg-purple-500 rounded-full relative after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
+                            </label>
+                            <button v-if="agentMessages.length > 1" @click="agentMessages = [{id: 1, role: 'ai', content: agentPersona === 'lindaidai' ? '林黛玉：侬来了～有什么想和黛玉说的？' : '您好！我是智能助手，有什么可以帮您的？'}]" class="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition text-gray-600">
+                                <i class="fas fa-trash-alt mr-1"></i>清空
+                            </button>
+                        </div>
+                    </div>
+                    
+                    <!-- 聊天容器 -->
+                    <div class="flex-1 bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
+                        <!-- 消息列表 -->
+                        <div class="flex-1 overflow-hidden relative">
+                            <!-- 欢迎语 -->
+                            <div v-if="agentMessages.length <= 1" class="absolute inset-0 flex items-center justify-center">
+                                <div class="text-center">
+                                    <div class="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-purple-100 to-indigo-100 flex items-center justify-center">
+                                        <i class="fas fa-comments text-3xl text-purple-500"></i>
+                                    </div>
+                                    <h3 class="text-xl font-semibold text-gray-700 mb-2">{{ agentPersona === 'lindaidai' ? '林黛玉在此恭候' : '开始智能对话' }}</h3>
+                                    <p class="text-gray-500">{{ agentPersona === 'lindaidai' ? '侬可以问我诗词、人生、情感，或者只是想聊聊天～' : '输入您的问题，AI将智能分析并调用合适的工具来回答' }}</p>
+                                </div>
+                            </div>
+                            
+                            <!-- 消息内容 -->
+                            <div ref="agentChatContainer" class="absolute inset-0 overflow-y-auto p-6" :class="{'invisible': agentMessages.length <= 1}">
+                                <div class="max-w-4xl mx-auto space-y-4">
+                                    <div v-for="msg in agentMessages" :key="msg.id" :class="['flex gap-3', msg.role === 'user' ? 'flex-row-reverse' : 'flex-row']">
+                                        <div :class="['w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden', msg.role === 'user' ? 'bg-blue-500' : (agentPersona === 'lindaidai' ? 'bg-gradient-to-br from-pink-400 to-red-400' : 'bg-gradient-to-br from-purple-500 to-indigo-500')]">
+                                            <img v-if="msg.role === 'ai' && agentPersona === 'lindaidai'" :src="'/static/lin.jpg'" class="w-full h-full object-cover">
+                                            <i v-else :class="['fas', msg.role === 'user' ? 'fa-user' : 'fa-robot']"></i>
+                                        </div>
+                                        <div :class="['max-w-[70%] px-4 py-3 rounded-2xl', msg.role === 'user' ? 'bg-blue-500 text-white rounded-tr-sm' : 'bg-gray-100 text-gray-800 rounded-tl-sm']">
+                                            <div v-if="msg.tools_used" class="mb-2">
+                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-600">
+                                                    <i class="fas fa-tools"></i> {{ msg.model_used || 'Agent' }}
+                                                </span>
+                                            </div>
+                                            <div v-html="formatMessage(msg.content)"></div>
+                                        </div>
+                                    </div>
+                                    <!-- 加载中 -->
+                                    <div v-if="agentLoading" class="flex gap-3">
+                                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center">
+                                            <i class="fas fa-robot text-white"></i>
+                                        </div>
+                                        <div class="bg-gray-100 px-4 py-3 rounded-2xl rounded-tl-sm">
+                                            <div class="flex gap-1">
+                                                <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></span>
+                                                <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></span>
+                                                <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
                             </div>
                         </div>
                         
-                        <!-- 消息区域 -->
-                        <div class="flex-1 flex flex-col overflow-hidden">
-                            <!-- 欢迎语 -->
-                            <div v-if="agentMessages.length <= 1" class="flex-1 flex items-center justify-center p-8">
-                                <div class="text-center max-w-2xl">
-                                    <div class="chat-welcome-icon inline-flex mb-4">
-                                        <i class="fas fa-robot text-4xl"></i>
-                                    </div>
-                                    <h3 class="text-xl font-semibold text-gray-700 mb-3">开始智能对话</h3>
-                                    <p class="text-gray-500 mb-6">试试这样问我：</p>
-                                    <div class="grid grid-cols-2 gap-4">
-                                        <div class="bg-gradient-to-r from-amber-50 to-orange-50 p-4 rounded-xl border border-amber-100 text-left hover:shadow-md transition cursor-pointer" @click="agentQuestion='北京天气怎么样？'; sendAgentQuestion()">
-                                            <i class="fas fa-cloud-sun text-amber-500 mb-2"></i>
-                                            <p class="text-sm text-gray-600">"北京天气怎么样？"</p>
-                                        </div>
-                                        <div class="bg-gradient-to-r from-blue-50 to-cyan-50 p-4 rounded-xl border border-blue-100 text-left hover:shadow-md transition cursor-pointer" @click="agentQuestion='现在几点了？'; sendAgentQuestion()">
-                                            <i class="fas fa-clock text-blue-500 mb-2"></i>
-                                            <p class="text-sm text-gray-600">"现在几点了？"</p>
-                                        </div>
-                                        <div class="bg-gradient-to-r from-red-50 to-pink-50 p-4 rounded-xl border border-red-100 text-left hover:shadow-md transition cursor-pointer" @click="agentQuestion='你好，林黛玉！'; sendAgentQuestion()">
-                                            <i class="fas fa-book text-red-500 mb-2"></i>
-                                            <p class="text-sm text-gray-600">"你好，林黛玉！"</p>
-                                        </div>
-                                        <div class="bg-gradient-to-r from-purple-50 to-indigo-50 p-4 rounded-xl border border-purple-100 text-left hover:shadow-md transition cursor-pointer" @click="agentQuestion='帮我写一段Python代码'; sendAgentQuestion()">
-                                            <i class="fas fa-code text-purple-500 mb-2"></i>
-                                            <p class="text-sm text-gray-600">"帮我写一段Python代码"</p>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- 消息列表 -->
-                            <div class="chat-messages flex-1 overflow-y-auto" ref="agentChatContainer" :class="{'hidden': agentMessages.length <= 1}">
-                                <div class="chat-messages-inner">
-                                    <div v-for="msg in agentMessages" :key="msg.id" :class="['chat-message-wrap', msg.role === 'user' ? 'user' : 'ai']">
-                                        <div :class="['chat-avatar', msg.role === 'user' ? 'user-avatar-chat' : 'ai-avatar-chat']">
-                                            <i :class="msg.role === 'user' ? 'fas fa-user' : 'fas fa-robot'"></i>
-                                        </div>
-                                        <div :class="['chat-message', msg.role === 'user' ? 'chat-user-msg' : 'chat-ai-msg']">
-                                            <div v-if="msg.tools_used" class="tool-badge mb-2">
-                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-600">
-                                                    <i class="fas fa-tools"></i> 使用工具 · {{ msg.model_used || 'Agent' }}
-                                                </span>
-                                            </div>
-                                            <div class="text-content">{{ msg.content }}</div>
-                                        </div>
-                                    </div>
-                                    <div v-if="agentLoading" class="chat-message-wrap ai">
-                                        <div class="chat-avatar ai-avatar-chat">
-                                            <i class="fas fa-robot"></i>
-                                        </div>
-                                        <div class="chat-message chat-ai-msg">
-                                            <div class="typing-indicator">
-                                                <span class="typing-dot"></span>
-                                                <span class="typing-dot"></span>
-                                                <span class="typing-dot"></span>
-                                            </div>
-                                        </div>
-                                    </div>
-                                </div>
-                            </div>
-                            
-                            <!-- 输入框 -->
-                            <div class="chat-input-area border-t border-gray-200">
-                                <div class="max-w-6xl mx-auto px-6">
-                                    <div class="chat-input-box">
-                                        <input type="text" v-model="agentQuestion" @keyup.enter="sendAgentQuestion" placeholder="输入问题，按回车发送...">
-                                        <button @click="sendAgentQuestion" class="chat-send-btn" :disabled="agentLoading">
-                                            <i class="fas fa-paper-plane"></i>
-                                        </button>
-                                    </div>
+                        <!-- 输入框 -->
+                        <div class="p-4 border-t border-gray-100">
+                            <div class="max-w-4xl mx-auto">
+                                <div class="flex gap-3 items-center bg-gray-50 rounded-2xl px-4 py-2 border border-gray-200 focus-within:border-purple-400 focus-within:bg-white transition">
+                                    <input type="text" v-model="agentQuestion" @keyup.enter="sendAgentQuestion" :placeholder="agentPersona === 'lindaidai' ? '和林黛玉说点什么...' : '输入问题，按回车发送...'" :disabled="agentLoading" class="flex-1 bg-transparent outline-none text-gray-700">
+                                    <button @click="sendAgentQuestion" :disabled="agentLoading || !agentQuestion.trim()" class="w-10 h-10 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 text-white flex items-center justify-center hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition">
+                                        <i class="fas fa-paper-plane"></i>
+                                    </button>
                                 </div>
                             </div>
                         </div>
@@ -1273,40 +1650,100 @@
 
                         <!-- RAG 问答 -->
                         <el-tab-pane label="RAG 问答">
-                            <div class="bg-white rounded-2xl p-6 shadow-sm border border-gray-100">
-                                <h3 class="text-lg font-semibold text-gray-800 mb-4">
-                                    <i class="fas fa-robot text-purple-500 mr-2"></i>RAG 智能问答
-                                </h3>
-                                <p class="text-gray-500 text-sm mb-4">基于知识库的智能问答，请先上传相关文档</p>
-
-                                <!-- 聊天消息 -->
-                                <div class="h-[400px] overflow-y-auto mb-4 p-4 bg-gray-50 rounded-xl space-y-4">
-                                    <div v-for="msg in kbChatMessages" :key="msg.id"
-                                         :class="['flex', msg.role === 'user' ? 'justify-end' : 'justify-start']">
-                                        <div :class="['max-w-[70%] px-4 py-3 rounded-2xl',
-                                            msg.role === 'user' ? 'bg-blue-500 text-white' : 'bg-white border border-gray-200 text-gray-800']">
-                                            <p class="text-sm">{{ msg.content }}</p>
-                                        </div>
+                            <div class="rag-container">
+                                <!-- 左侧：聊天区域 -->
+                                <div class="rag-chat-area">
+                                    <div class="rag-header">
+                                        <h3><i class="fas fa-robot text-purple-500"></i>智能问答助手</h3>
+                                        <button v-if="kbChatMessages.length > 0" @click="kbChatMessages = []" class="clear-btn" title="清空聊天">
+                                            <i class="fas fa-trash-alt"></i>
+                                        </button>
                                     </div>
-                                    <div v-if="kbChatLoading" class="flex justify-start">
-                                        <div class="bg-white border border-gray-200 px-4 py-3 rounded-2xl">
-                                            <i class="fas fa-spinner fa-spin text-gray-400"></i>
+
+                                    <!-- 消息列表 -->
+                                    <div class="chat-messages" ref="kbChatContainer">
+                                        <!-- 欢迎消息 -->
+                                        <div v-if="kbChatMessages.length === 0" class="welcome-message">
+                                            <div class="welcome-icon">
+                                                <i class="fas fa-lightbulb"></i>
+                                            </div>
+                                            <h4>您好！我是智能问答助手</h4>
+                                            <p>我可以根据已上传的文档回答您的问题</p>
+                                            <div class="quick-questions">
+                                                <span class="quick-label">试试问：</span>
+                                                <button @click="kbCurrentQuestion = '毕业条件是什么？'; askKnowledge()" class="quick-btn">毕业条件</button>
+                                                <button @click="kbCurrentQuestion = '如何添加学生信息？'; askKnowledge()" class="quick-btn">添加学生</button>
+                                                <button @click="kbCurrentQuestion = '班级有哪些？'; askKnowledge()" class="quick-btn">班级信息</button>
+                                            </div>
+                                        </div>
+
+                                        <!-- 聊天消息 -->
+                                        <template v-for="msg in kbChatMessages" :key="msg.id">
+                                            <!-- 用户消息 -->
+                                            <div v-if="msg.role === 'user'" class="message-wrapper user-message">
+                                                <div class="message-content">
+                                                    <p>{{ msg.content }}</p>
+                                                </div>
+                                                <div class="avatar user-avatar">
+                                                    <i class="fas fa-user"></i>
+                                                </div>
+                                            </div>
+                                            <!-- AI 消息 -->
+                                            <div v-else class="message-wrapper ai-message">
+                                                <div class="avatar ai-avatar">
+                                                    <i class="fas fa-robot"></i>
+                                                </div>
+                                                <div class="message-content">
+                                                    <p v-if="msg.content">{{ msg.content }}</p>
+                                                    <div v-else class="typing-indicator">
+                                                        <span></span><span></span><span></span>
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </template>
+                                    </div>
+
+                                    <!-- 输入区域 -->
+                                    <div class="chat-input-area">
+                                        <div class="input-wrapper">
+                                            <input
+                                                v-model="kbCurrentQuestion"
+                                                placeholder="输入您的问题..."
+                                                :disabled="kbChatLoading"
+                                                @keyup.enter="askKnowledge"
+                                            />
+                                            <button @click="askKnowledge" :disabled="kbChatLoading || !kbCurrentQuestion.trim()" class="send-btn">
+                                                <i v-if="!kbChatLoading" class="fas fa-paper-plane"></i>
+                                                <i v-else class="fas fa-spinner fa-spin"></i>
+                                            </button>
                                         </div>
                                     </div>
                                 </div>
 
-                                <!-- 输入框 -->
-                                <div class="flex gap-3">
-                                    <el-input
-                                        v-model="kbCurrentQuestion"
-                                        placeholder="输入问题..."
-                                        size="large"
-                                        :disabled="kbChatLoading"
-                                        @keyup.enter="askKnowledge"
-                                    />
-                                    <el-button type="primary" size="large" :loading="kbChatLoading" @click="askKnowledge">
-                                        <i class="fas fa-paper-plane mr-1"></i>发送
-                                    </el-button>
+                                <!-- 右侧：知识库状态 -->
+                                <div class="rag-sidebar">
+                                    <div class="sidebar-header">
+                                        <i class="fas fa-database"></i>
+                                        <span>知识库状态</span>
+                                    </div>
+                                    <div class="sidebar-content">
+                                        <div class="stat-item">
+                                            <span class="stat-label">向量库</span>
+                                            <span class="stat-value success">已连接</span>
+                                        </div>
+                                        <div class="stat-item">
+                                            <span class="stat-label">文档集合</span>
+                                            <span class="stat-value">4 个</span>
+                                        </div>
+                                        <div class="stat-item">
+                                            <span class="stat-label">检索模式</span>
+                                            <span class="stat-value">语义检索</span>
+                                        </div>
+                                    </div>
+                                    <div class="sidebar-tip">
+                                        <i class="fas fa-info-circle"></i>
+                                        <p>知识库包含升学指南、课程介绍等文档，可回答相关问题。</p>
+                                    </div>
                                 </div>
                             </div>
                         </el-tab-pane>
@@ -1721,6 +2158,22 @@
 const { createApp, ref, onMounted, watch, nextTick, computed } = Vue;
 const { ElMessage } = ElementPlus;
 
+// Axios 拦截器 - 添加调试日志
+axios.interceptors.request.use(config => {
+    console.log('[Axios Request]', config.method?.toUpperCase(), config.url, config.data);
+    return config;
+});
+axios.interceptors.response.use(
+    response => {
+        console.log('[Axios Response]', response.status, response.config.url, response.data);
+        return response;
+    },
+    error => {
+        console.error('[Axios Error]', error.config?.url, error.message, error.response?.data);
+        return Promise.reject(error);
+    }
+);
+
 const app = createApp({
     setup() {
         // ============================================
@@ -1730,6 +2183,7 @@ const app = createApp({
         const authMode = ref('login');
         const authUsername = ref('');
         const authPassword = ref('');
+        const authLoading = ref(false);
         const activeTab = ref('dashboard');
         const mgmtTab = ref('student');
         
@@ -1831,6 +2285,16 @@ const app = createApp({
         }]);
         const kbCurrentQuestion = ref('');
         const kbChatLoading = ref(false);
+        const kbChatContainer = ref(null);
+
+        // 滚动到底部
+        const scrollChatToBottom = () => {
+            nextTick(() => {
+                if (kbChatContainer.value) {
+                    kbChatContainer.value.scrollTop = kbChatContainer.value.scrollHeight;
+                }
+            });
+        };
 
         // 表单
         const studentDialogVisible = ref(false);
@@ -1872,12 +2336,23 @@ const app = createApp({
         // 认证方法
         // ============================================
         const submitAuth = async () => {
+            if (authLoading.value) return;
+            
+            if (!authUsername.value || !authPassword.value) {
+                ElMessage.warning('请输入用户名和密码');
+                return;
+            }
+            
+            console.log('[Login] Starting auth request', { mode: authMode.value, username: authUsername.value });
+            authLoading.value = true;
             try {
                 if (authMode.value === 'login') {
+                    console.log('[Login] Sending login request');
                     const res = await axios.post('/auth/login', {
                         username: authUsername.value,
                         password: authPassword.value
                     });
+                    console.log('[Login] Success', res.data);
                     localStorage.setItem('access_token', res.data.access_token);
                     setAuthToken(res.data.access_token);
                     isLoggedIn.value = true;
@@ -1885,15 +2360,21 @@ const app = createApp({
                     await refreshDashboard();
                     await loadManagementData();
                 } else {
+                    console.log('[Register] Sending register request');
                     await axios.post('/auth/register', {
                         username: authUsername.value,
                         password: authPassword.value
                     });
+                    console.log('[Register] Success');
                     ElMessage.success('注册成功，请登录');
                     authMode.value = 'login';
                 }
             } catch (err) {
-                ElMessage.error(err.response?.data?.detail || '操作失败');
+                const errorMsg = err.response?.data?.detail || err.message || '操作失败，请重试';
+                console.error('[Auth] Error:', err);
+                ElMessage.error(errorMsg);
+            } finally {
+                authLoading.value = false;
             }
         };
         
@@ -2500,7 +2981,7 @@ const app = createApp({
         };
 
         // ============================================
-        // Agent 助手
+        // Agent 助手 (流式输出)
         // ============================================
         const sendAgentQuestion = async () => {
             if (!agentQuestion.value.trim() || agentLoading.value) return;
@@ -2515,33 +2996,95 @@ const app = createApp({
                 const payload = { question };
                 if (agentSessionId.value) payload.session_id = agentSessionId.value;
                 if (agentPersona.value) payload.persona = agentPersona.value;
-                
+
                 // 添加对话历史作为上下文
-                const context = agentMessages.value.map(msg => ({
+                const context = agentMessages.value.slice(0, -1).map(msg => ({
                     role: msg.role,
                     content: msg.content
                 }));
                 payload.context = context;
 
-                const res = await axios.post('/agent/chat', payload);
-                const result = res.data;
-
-                if (result.session_id) agentSessionId.value = result.session_id;
-
+                // 创建 AI 消息占位
+                const aiMsgId = Date.now();
+                let currentAnswer = '';
                 agentMessages.value.push({
-                    id: Date.now(),
+                    id: aiMsgId,
                     role: 'ai',
-                    content: result.answer,
-                    tools_used: result.tools_used,
-                    model_used: result.model_used
+                    content: '',
+                    model_used: '',
+                    tools_used: false
                 });
+
+                // 流式请求
+                const response = await fetch('/agent/chat', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(payload)
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const text = decoder.decode(value);
+                    const lines = text.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+
+                                if (data.type === 'meta') {
+                                    // 更新元数据
+                                    const msg = agentMessages.value.find(m => m.id === aiMsgId);
+                                    if (msg) {
+                                        msg.model_used = data.model_used;
+                                        msg.tools_used = data.tools_used;
+                                        if (data.session_id) agentSessionId.value = data.session_id;
+                                    }
+                                } else if (data.type === 'answer') {
+                                    // 逐字追加内容
+                                    currentAnswer += data.content;
+                                    const msg = agentMessages.value.find(m => m.id === aiMsgId);
+                                    if (msg) msg.content = currentAnswer;
+                                    await nextTick();
+                                    scrollAgentToBottom();
+                                } else if (data.type === 'done') {
+                                    // 完成
+                                    console.log('回答完成，耗时:', data.total_time_ms, 'ms');
+                                } else if (data.type === 'error') {
+                                    // 错误
+                                    const msg = agentMessages.value.find(m => m.id === aiMsgId);
+                                    if (msg) msg.content = data.content;
+                                }
+                            } catch (e) {
+                                // 忽略解析错误
+                            }
+                        }
+                    }
+                }
             } catch (err) {
-                agentMessages.value.push({ id: Date.now(), role: 'ai', content: `抱歉，发生了错误：${err.response?.data?.detail || err.message}` });
+                agentMessages.value.push({ id: Date.now(), role: 'ai', content: `抱歉，发生了错误：${err.message}` });
             } finally {
                 agentLoading.value = false;
                 await nextTick();
                 scrollAgentToBottom();
             }
+        };
+        
+        // 格式化消息（处理换行和代码块）
+        const formatMessage = (content) => {
+            if (!content) return '';
+            // 处理代码块
+            let formatted = content.replace(/```(\w*)\n?([\s\S]*?)```/g, '<pre class="code-block"><code>$2</code></pre>');
+            // 处理行内代码
+            formatted = formatted.replace(/`([^`]+)`/g, '<code class="inline-code">$1</code>');
+            // 处理换行
+            formatted = formatted.replace(/\n/g, '<br>');
+            return formatted;
         };
         
         const scrollAgentToBottom = () => {
@@ -2610,40 +3153,77 @@ const app = createApp({
                 return;
             }
             const question = kbCurrentQuestion.value;
+            const userMsgId = Date.now();
             kbChatMessages.value.push({
-                id: Date.now(),
+                id: userMsgId,
                 role: 'user',
                 content: question
             });
             kbCurrentQuestion.value = '';
             kbChatLoading.value = true;
 
+            // 创建 AI 消息占位
+            const aiMsgId = userMsgId + 1;
+            kbChatMessages.value.push({
+                id: aiMsgId,
+                role: 'ai',
+                content: ''
+            });
+            scrollChatToBottom();
+
             try {
-                // 调用 RAG 问答接口，LLM 会根据检索到的内容生成答案
-                const res = await axios.post('/rag/query', {
-                    question: question,
-                    top_k: 5
+                // 使用 Fetch API 处理 SSE 流式响应
+                const response = await fetch('/rag/query', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                    },
+                    body: JSON.stringify({
+                        question: question,
+                        top_k: 5
+                    })
                 });
 
-                if (res.data.answer) {
-                    kbChatMessages.value.push({
-                        id: Date.now() + 1,
-                        role: 'ai',
-                        content: res.data.answer
-                    });
-                } else {
-                    kbChatMessages.value.push({
-                        id: Date.now() + 1,
-                        role: 'ai',
-                        content: '抱歉，未能获取到答案。请稍后重试。'
-                    });
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+                let answerContent = '';
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const chunk = decoder.decode(value);
+                    const lines = chunk.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            const data = line.slice(6);
+                            if (data === '[DONE]') continue;
+
+                            try {
+                                const parsed = JSON.parse(data);
+                                if (parsed.type === 'answer' && parsed.content) {
+                                    answerContent += parsed.content;
+                                    // 实时更新消息内容
+                                    const msg = kbChatMessages.value.find(m => m.id === aiMsgId);
+                                    if (msg) msg.content = answerContent;
+                                    scrollChatToBottom();
+                                }
+                            } catch (e) {
+                                // 忽略解析错误
+                            }
+                        }
+                    }
+                }
+
+                // 如果没有收到任何内容
+                if (!answerContent) {
+                    const msg = kbChatMessages.value.find(m => m.id === aiMsgId);
+                    if (msg) msg.content = '抱歉，未能获取到答案。请稍后重试。';
                 }
             } catch (err) {
-                kbChatMessages.value.push({
-                    id: Date.now() + 1,
-                    role: 'ai',
-                    content: '抱歉，查询知识库时出错：' + (err.response?.data?.detail || err.message)
-                });
+                const msg = kbChatMessages.value.find(m => m.id === aiMsgId);
+                if (msg) msg.content = '抱歉，查询知识库时出错：' + err.message;
             } finally {
                 kbChatLoading.value = false;
             }
@@ -2709,9 +3289,9 @@ const app = createApp({
             // 知识库管理
             kbUploadLoading, kbUploadCategory, kbCategories, handleKnowledgeUpload,
             searchKnowledge, kbSearchQuery, kbSearchResults, kbSearchLoading,
-            askKnowledge, kbChatMessages, kbChatLoading, kbCurrentQuestion,
+            askKnowledge, kbChatMessages, kbChatLoading, kbCurrentQuestion, kbChatContainer,
             // Agent助手
-            agentMessages, agentQuestion, agentLoading, agentPersona, sendAgentQuestion, agentChatContainer
+            agentMessages, agentQuestion, agentLoading, agentPersona, sendAgentQuestion, agentChatContainer, formatMessage
         };
     }
 });
