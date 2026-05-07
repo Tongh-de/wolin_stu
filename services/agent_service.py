@@ -264,8 +264,66 @@ TOOLS_SCHEMA = [
                 "required": ["question"]
             }
         }
+    },
+    {
+        "type": "function",
+        "function": {
+            "name": "query_knowledge_base",
+            "description": "查询知识库中与问题相关的内容。当你需要回答关于文档、政策、指南等知识库相关问题时，必须使用此工具获取准确信息。",
+            "parameters": {
+                "type": "object",
+                "properties": {
+                    "question": {
+                        "type": "string",
+                        "description": "用户的查询问题，例如：'毕业条件是什么'、'课程设置有哪些'、'升学指南的内容'"
+                    }
+                },
+                "required": ["question"]
+            }
+        }
     }
 ]
+
+
+async def query_knowledge_base(question: str) -> str:
+    """
+    查询知识库获取相关内容
+    使用 Milvus 向量数据库进行语义检索
+    """
+    try:
+        from services.rag_complete import retrieve_relevant_chunks
+        import asyncio
+        
+        # 检索相关文档片段
+        results = await asyncio.to_thread(retrieve_relevant_chunks, question, top_k=5)
+        
+        print(f"[知识库检索] 问题: {question}, 结果数量: {len(results) if results else 0}")
+        
+        if not results:
+            return "【知识库检索结果为空】当前知识库中没有找到与该问题相关的内容。"
+        
+        # 检查相关性 - L2距离越小越相似，阈值设为1.5（越小越相关）
+        relevant_results = [r for r in results if r.get("score", 999) < 1.5]
+        
+        print(f"[知识库检索] 过滤后相关结果: {len(relevant_results)} 条（阈值: distance < 1.5）")
+        
+        if not relevant_results:
+            return "【知识库检索结果】知识库中确实没有与您问题相关的内容。我无法根据现有知识库回答这个问题。"
+        
+        # 格式化返回结果
+        formatted_results = []
+        for i, chunk in enumerate(relevant_results, 1):
+            content = chunk.get("content", "")
+            filename = chunk.get("metadata", {}).get("filename", "未知文档")
+            print(f"[知识库检索] 来源{i}: {filename}, 距离: {chunk.get('score', 0):.2f}")
+            formatted_results.append(f"【来源{i}: {filename}】\n{content}")
+        
+        return "【知识库检索结果】\n" + "\n\n".join(formatted_results)
+    except Exception as e:
+        import traceback
+        print(f"[知识库检索错误] {str(e)}")
+        traceback.print_exc()
+        return f"【知识库查询失败】无法访问知识库，错误信息: {str(e)}。"
 
 
 async def get_weather(city: str, lang: str = "zh_CN") -> str:
@@ -372,12 +430,13 @@ async def query_student_data(question: str) -> str:
 TOOL_FUNCTIONS: dict[str, Callable] = {
     "get_weather": get_weather,
     "get_current_time": get_current_time,
-    "query_student_data": query_student_data
+    "query_student_data": query_student_data,
+    "query_knowledge_base": query_knowledge_base
 }
 
 
 # ============================================
-# 模型客户端管理
+# 意图分类
 # ============================================
 _clients = {}
 
@@ -411,6 +470,7 @@ async def classify_intent(question: str) -> tuple[str, str]:
     - general: 通用问答
     """
     question_lower = question.lower()
+    print(f"[意图识别] 原始问题: {question}")
     
     # 移除常见标点和空白
     import re
@@ -436,8 +496,9 @@ async def classify_intent(question: str) -> tuple[str, str]:
          "math", "包含数学计算关键词"),
 
         # RAG/知识库
-        (["知识库", "文档", "上传", "入库", "检索", "查找文档"],
-         "rag", "知识库操作请求"),
+        (["知识库", "文档", "上传", "入库", "检索", "查找文档", "毕业", "升学", "课程", "政策", "指南", "规定", "条件",
+          "金陵十二钗", "红楼梦", "薛宝钗", "林黛玉", "贾宝玉", "王熙凤", "史湘云", "介绍", "讲解", "是什么", "有哪些", "说说", "告诉我"],
+         "rag", "知识库问答请求"),
 
         # 数据分析
         (["分析", "为什么", "原因", "趋势", "比较", "对比"],
@@ -460,8 +521,10 @@ async def classify_intent(question: str) -> tuple[str, str]:
     for keywords, intent, reason in rules:
         for kw in keywords:
             if kw in question_clean or kw in question_lower:
+                print(f"[意图识别] 匹配到: intent={intent}, reason={reason}, keyword={kw}")
                 return intent, reason
     
+    print(f"[意图识别] 未匹配，返回: general")
     return "general", "通用问答请求"
 
 
@@ -470,7 +533,7 @@ async def classify_intent(question: str) -> tuple[str, str]:
 # ============================================
 
 # 需要使用工具的意图
-TOOL_INTENTS = ["weather", "time", "lindaidai", "nl2sql", "analysis"]
+TOOL_INTENTS = ["weather", "time", "lindaidai", "nl2sql", "analysis", "rag"]
 
 
 def select_model(intent: str, force_model: Optional[str] = None) -> tuple[dict, str]:
@@ -559,11 +622,14 @@ async def call_llm_with_tools(client: AsyncOpenAI, model: str, messages: list,
         if result["type"] == "tool_call":
             tool_name = result["tool"]
             args = result["arguments"]
+            print(f"[工具调用] 工具名称: {tool_name}, 参数: {args}")
 
             # 查找工具函数
             if tool_name in TOOL_FUNCTIONS:
                 tool_func = TOOL_FUNCTIONS[tool_name]
                 tool_result = await tool_func(**args)
+                print(f"[工具调用] 返回结果长度: {len(tool_result)} 字符")
+                print(f"[工具调用] 返回结果前200字: {tool_result[:200]}...")
 
                 # 添加助手消息和工具结果
                 assistant_msg = messages[-1]["content"] if messages else ""
@@ -634,7 +700,18 @@ async def run_agent(question: str, context: Optional[List[dict]] = None, persona
 1. 列出计算步骤
 2. 最终给出精确答案""",
 
-        "rag": """你是一个知识库问答助手，根据提供的内容回答问题。""",
+        "rag": """你是一个严谨的知识库问答助手。必须使用 query_knowledge_base 工具查询知识库获取相关信息。
+
+【关键规则 - 绝对禁止乱编】
+1. 工具返回的结果会明确标注"知识库检索结果"
+2. 如果检索结果明确说"没有相关内容"或检索内容与问题无关，你必须诚实回答："抱歉，知识库中没有找到与您问题相关的内容。"
+3. 绝对不要根据不相关的检索结果擅自推断答案
+4. 绝对不要在没有检索结果时自己编造答案
+5. 可以引用检索到的原文内容来回答
+
+【回复格式】
+- 如果有相关结果：基于检索内容回答
+- 如果没有相关结果：直接告知用户"抱歉，知识库中没有找到相关内容""",
 
         "analysis": """你是一个数据分析专家，解释数据趋势和原因。""",
 
@@ -867,7 +944,18 @@ async def agent_chat_stream(request: AgentRequest):
 1. 列出计算步骤
 2. 最终给出精确答案""",
 
-                "rag": """你是一个知识库问答助手，根据提供的内容回答问题。""",
+                "rag": """你是一个严谨的知识库问答助手。必须使用 query_knowledge_base 工具查询知识库获取相关信息。
+
+【关键规则 - 绝对禁止乱编】
+1. 工具返回的结果会明确标注"知识库检索结果"
+2. 如果检索结果明确说"没有相关内容"或检索内容与问题无关，你必须诚实回答："抱歉，知识库中没有找到与您问题相关的内容。"
+3. 绝对不要根据不相关的检索结果擅自推断答案
+4. 绝对不要在没有检索结果时自己编造答案
+5. 可以引用检索到的原文内容来回答
+
+【回复格式】
+- 如果有相关结果：基于检索内容回答
+- 如果没有相关结果：直接告知用户"抱歉，知识库中没有找到相关内容""",
 
                 "analysis": """你是一个数据分析专家，可以分析学生管理系统的数据。
 
@@ -904,7 +992,12 @@ async def agent_chat_stream(request: AgentRequest):
 2. 可以适当引用《红楼梦》中的典故
 3. 遇到宝玉相关话题会特别敏感
 4. 谈论花草、诗词、月亮等话题时更有感触
-5. 可以调用get_current_time获取时间，但要以黛玉的口吻回应""",
+5. 可以调用get_current_time获取时间，但要以黛玉的口吻回应
+
+【重要】当用户询问关于毕业、升学、课程、政策、规定、文档等知识库相关内容时：
+1. 必须先调用 query_knowledge_base 工具获取准确信息
+2. 然后以林黛玉的语气和风格，将知识库内容转化为诗意、感伤的回答
+3. 不要编造信息，只根据知识库查询结果回答""",
 
                 "general": """你是一个智能助手，准确回答用户问题。
 当用户询问天气或时间时，可以使用相应工具获取准确信息。"""
