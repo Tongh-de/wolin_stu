@@ -4,12 +4,22 @@ from database import get_db
 from services import EmploymentService
 from schemas import ResponseBase, ListResponse
 from schemas.emp_schemas import EmploymentUpdate, EmploymentResp
+from utils.auth_deps import get_current_user, require_admin, require_teacher_or_admin
+from model.user import User
 
 router = APIRouter(prefix="/employment", tags=["就业管理模块"])
 
 
 @router.get("/students/{stu_id}", response_model=ResponseBase)
-def get_student_employment(stu_id: int, db: Session = Depends(get_db)):
+def get_student_employment(
+        stu_id: int, 
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)  # 登录用户
+):
+    # 学生只能查自己的就业信息
+    if current_user.role == 'student' and current_user.student_id != stu_id:
+        raise HTTPException(status_code=403, detail="只能查询自己的就业信息")
+    
     emp = EmploymentService.get_employment_by_stu_id(db, stu_id)
     if not emp:
         raise HTTPException(status_code=404, detail="未找到就业信息")
@@ -18,7 +28,11 @@ def get_student_employment(stu_id: int, db: Session = Depends(get_db)):
 
 
 @router.get("/class/{class_id}", response_model=ListResponse)
-def get_class_employment(class_id: int, db: Session = Depends(get_db)):
+def get_class_employment(
+        class_id: int, 
+        db: Session = Depends(get_db),
+        current_user: User = Depends(require_teacher_or_admin)  # 教师或管理员
+):
     data = EmploymentService.get_employment_by_class_id(db, class_id)
     list_data = [EmploymentResp.model_validate(item) for item in data]
     return ListResponse(code=200, message="查询成功", data=list_data, total=len(list_data))
@@ -26,12 +40,17 @@ def get_class_employment(class_id: int, db: Session = Depends(get_db)):
 
 @router.get("/query", response_model=ListResponse)
 def query_employment(
-    stu_id: int = None,
-    company: str = None,
-    min_salary: int = None,
-    max_salary: int = None,
-    db: Session = Depends(get_db)
+    stu_id: int | None = Query(default=None, description="学生ID"),
+    company: str | None = Query(default=None, description="公司名称"),
+    min_salary: int | None = Query(default=None, description="最低薪资"),
+    max_salary: int | None = Query(default=None, description="最高薪资"),
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user)  # 登录用户
 ):
+    # 学生只能查自己的
+    if current_user.role == 'student' and current_user.student_id:
+        stu_id = current_user.student_id
+    
     data = EmploymentService.query_employment(db, stu_id=stu_id, company=company, min_salary=min_salary, max_salary=max_salary)
     list_data = [EmploymentResp.model_validate(item) for item in data]
     return ListResponse(code=200, message="查询成功", data=list_data, total=len(list_data))
@@ -41,7 +60,8 @@ def query_employment(
 def update_student_employment(
         stu_id: int,
         update_data: EmploymentUpdate,
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(require_teacher_or_admin)  # 教师或管理员
 ):
     emp = EmploymentService.get_employment_by_stu_id(db, stu_id)
     if not emp:
@@ -56,7 +76,11 @@ def update_student_employment(
 
 
 @router.delete("/delete/{emp_id}", response_model=ResponseBase)
-def delete_employment_api(emp_id: int, db: Session = Depends(get_db)):
+def delete_employment_api(
+        emp_id: int, 
+        db: Session = Depends(get_db),
+        current_user: User = Depends(require_admin)  # 仅管理员
+):
     emp = EmploymentService.get_employment_by_emp_id(db, emp_id)
     if not emp:
         raise HTTPException(status_code=404, detail="记录不存在或已删除")
@@ -69,7 +93,11 @@ def delete_employment_api(emp_id: int, db: Session = Depends(get_db)):
 
 
 @router.put("/restore/{emp_id}", response_model=ResponseBase)
-def restore_emp(emp_id: int, db: Session = Depends(get_db)):
+def restore_emp(
+        emp_id: int, 
+        db: Session = Depends(get_db),
+        current_user: User = Depends(require_admin)  # 仅管理员
+):
     success = EmploymentService.restore_employment(db, emp_id)
     if not success:
         raise HTTPException(status_code=404, detail="恢复失败")

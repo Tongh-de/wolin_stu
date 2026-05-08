@@ -63,3 +63,33 @@ def require_admin(current_user: User = Depends(get_current_user)) -> User:
             detail="需要管理员权限"
         )
     return current_user
+
+
+def require_teacher(current_user: User = Depends(get_current_user)) -> User:
+    """要求教师或管理员权限"""
+    if current_user.role not in ['admin', 'teacher']:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="需要教师或管理员权限"
+        )
+    return current_user
+
+
+def require_student(current_user: User = Depends(get_current_user)) -> User:
+    """要求学生或教师或管理员权限"""
+    if current_user.role not in ['admin', 'teacher', 'student']:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="需要登录才能访问"
+        )
+    return current_user
+
+
+def require_teacher_or_admin(current_user: User = Depends(get_current_user)) -> User:
+    """仅允许教师或管理员（不含学生）"""
+    if current_user.role not in ['admin', 'teacher']:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="需要教师或管理员权限"
+        )
+    return current_user

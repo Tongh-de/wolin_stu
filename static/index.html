@@ -12,42 +12,21 @@
     <script src="https://unpkg.com/element-plus"></script>
     <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+    
+    <!-- 模块化样式和脚本 -->
+    <link rel="stylesheet" href="/static/styles.css">
+    <script src="/static/js/api-config.js"></script>
+    <script src="/static/js/utils.js"></script>
+    <script src="/static/js/ai-service.js"></script>
+    <script src="/static/js/data-service.js"></script>
+    <script src="/static/js/chart-service.js"></script>
+    
     <style>
         /* ============================================
            沃林学生管理系统 - 简约商务校园风格
            主色调：蓝色 (#2563EB)
            配色：干净清爽、专业商务
            ============================================ */
-        
-        * { 
-            font-family: 'Noto Sans SC', 'PingFang SC', 'Microsoft YaHei', sans-serif;
-            box-sizing: border-box;
-        }
-        
-        body {
-            background: linear-gradient(135deg, #f0f7ff 0%, #e8f4fd 100%);
-            min-height: 100vh;
-            margin: 0;
-            color: #1e293b;
-        }
-        
-        /* ============================================
-           滚动条美化
-           ============================================ */
-        ::-webkit-scrollbar { width: 6px; height: 6px; }
-        ::-webkit-scrollbar-track { background: #f1f5f9; border-radius: 10px; }
-        ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 10px; }
-        ::-webkit-scrollbar-thumb:hover { background: #94a3b8; }
-        
-        /* ============================================
-           登录框样式
-           ============================================ */
-        .login-container {
-            background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
-            border-radius: 24px;
-            box-shadow: 0 25px 50px -12px rgba(37, 99, 235, 0.15),
-                        0 0 0 1px rgba(37, 99, 235, 0.05);
-        }
         .login-logo {
             width: 72px;
             height: 72px;
@@ -1069,6 +1048,17 @@
             <div class="space-y-4">
                 <input type="text" v-model="authUsername" placeholder="请输入用户名" class="login-input" @keyup.enter="submitAuth" :disabled="authLoading">
                 <input type="password" v-model="authPassword" placeholder="请输入密码" class="login-input" @keyup.enter="submitAuth" :disabled="authLoading">
+                <!-- 注册时显示验证规则提示 -->
+                <div v-if="authMode === 'register'" class="text-xs text-gray-400 text-left px-1">
+                    <p><i class="fas fa-info-circle mr-1"></i>用户名：3-20位字母、数字或下划线</p>
+                    <p><i class="fas fa-info-circle mr-1"></i>密码：至少6位</p>
+                </div>
+                <!-- 注册时选择角色 -->
+                <select v-if="authMode === 'register'" v-model="authRole" class="login-input" style="color: #6b7280;">
+                    <option value="student">学生</option>
+                    <option value="teacher">教师</option>
+                    <option value="admin">管理员</option>
+                </select>
                 <button @click="submitAuth" class="login-btn" :disabled="authLoading">
                     <span v-if="authLoading"><i class="fas fa-spinner fa-spin"></i> 处理中...</span>
                     <span v-else><i class="fas" :class="authMode === 'login' ? 'fa-sign-in-alt' : 'fa-user-plus'"></i> {{ authMode === 'login' ? '登 录' : '注 册' }}</span>
@@ -1116,13 +1106,16 @@
                 <a @click="activeTab = 'agent'" :class="['nav-item', { active: activeTab === 'agent' }]">
                     <i class="fas fa-robot"></i>Agent助手
                 </a>
-                <a @click="activeTab = 'statistics'" :class="['nav-item', { active: activeTab === 'statistics' }]">
+                <a @click="activeTab = 'psychology'" :class="['nav-item', { active: activeTab === 'psychology' }]" v-if="currentUser.role === 'student' || currentUser.role === 'teacher'">
+                    <i class="fas fa-heart"></i>心理疏导
+                </a>
+                <a @click="activeTab = 'statistics'" :class="['nav-item', { active: activeTab === 'statistics' }]" v-if="currentUser.role !== 'student'">
                     <i class="fas fa-chart-line"></i>高级统计
                 </a>
-                <a @click="activeTab = 'knowledge'" :class="['nav-item', { active: activeTab === 'knowledge' }]">
+                <a @click="activeTab = 'knowledge'" :class="['nav-item', { active: activeTab === 'knowledge' }]" v-if="currentUser.role === 'admin'">
                     <i class="fas fa-brain"></i>知识库管理
                 </a>
-                <a @click="activeTab = 'management'" :class="['nav-item', { active: activeTab === 'management' }]">
+                <a @click="activeTab = 'management'" :class="['nav-item', { active: activeTab === 'management' }]" v-if="currentUser.role !== 'student'">
                     <i class="fas fa-database"></i>数据管理
                 </a>
             </nav>
@@ -1454,88 +1447,256 @@
                     <!-- 顶部工具栏 -->
                     <div class="flex items-center justify-between mb-4 px-2">
                         <div class="flex items-center gap-4">
-                            <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center">
+                        <div class="w-12 h-12 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center">
                                 <i class="fas fa-robot text-white text-xl"></i>
                             </div>
                             <div>
-                                <h2 class="text-xl font-semibold text-gray-800">Agent 智能助手</h2>
-                                <p class="text-sm text-gray-500">{{ agentPersona === 'lindaidai' ? '林黛玉模式已开启' : '支持天气、时间、代码等多种功能' }}</p>
+                                <h2 class="text-xl font-semibold text-gray-800">{{ agentPersona === 'lindaidai' ? '林黛玉' : agentPersona === 'xueshuzhuoyou' ? '学业卓友' : 'Agent 智能助手' }}</h2>
+                                <p class="text-sm text-gray-500">{{ agentPersona === 'lindaidai' ? '林黛玉模式已开启' : agentPersona === 'xueshuzhuoyou' ? '学业卓友模式已开启' : '支持天气、时间、代码等多种功能' }}</p>
                             </div>
                         </div>
                         <div class="flex items-center gap-3">
-                            <!-- 林黛玉开关 -->
-                            <label class="flex items-center gap-2 cursor-pointer bg-pink-50 hover:bg-pink-100 px-4 py-2 rounded-xl border border-pink-200 transition">
-                                <i class="fas fa-theater-masks text-red-500"></i>
-                                <span class="text-sm font-medium text-gray-700">林黛玉</span>
-                                <input type="checkbox" class="sr-only peer" v-model="agentPersona" true-value="lindaidai" false-value="">
-                                <div class="w-11 h-6 bg-gray-200 peer-checked:bg-purple-500 rounded-full relative after:absolute after:top-[2px] after:start-[2px] after:bg-white after:rounded-full after:h-5 after:w-5 after:transition-all peer-checked:after:translate-x-full"></div>
-                            </label>
-                            <button v-if="agentMessages.length > 1" @click="agentMessages = [{id: 1, role: 'ai', content: agentPersona === 'lindaidai' ? '林黛玉：侬来了～有什么想和黛玉说的？' : '您好！我是智能助手，有什么可以帮您的？'}]" class="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition text-gray-600">
+                            <button v-if="agentPersona === 'xueshuzhuoyou' && currentUser.role === 'student'" @click="showHomeworkDialog = true" class="px-4 py-2 text-sm bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition flex items-center gap-2">
+                                <i class="fas fa-upload"></i>提交作业
+                            </button>
+                            <button v-if="agentMessages.length > 1" @click="agentMessages = [{id: 1, role: 'ai', content: agentPersona === 'lindaidai' ? '林黛玉：侬来了～有什么想和黛玉说的？' : agentPersona === 'xueshuzhuoyou' ? '学业卓友：欢迎来到文学殿堂，有什么想探讨的？' : '您好！我是智能助手，有什么可以帮您的？'}]" class="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition text-gray-600">
                                 <i class="fas fa-trash-alt mr-1"></i>清空
+                            </button>
+                            <button v-if="agentPersona" @click="agentPersona = ''" class="px-4 py-2 text-sm bg-gray-100 hover:bg-gray-200 rounded-lg transition text-gray-600">
+                                <i class="fas fa-times mr-1"></i>关闭角色
                             </button>
                         </div>
                     </div>
                     
+                    <!-- 人格切换栏 -->
+                    <div class="px-6 py-3 bg-gray-50 border-y border-gray-100 flex items-center gap-4">
+                        <span class="text-sm text-gray-500">切换角色：</span>
+                        <button @click="agentPersona = 'xueshuzhuoyou'" :class="['px-4 py-2 rounded-lg text-sm font-medium transition', agentPersona === 'xueshuzhuoyou' ? 'bg-blue-500 text-white' : 'bg-blue-50 text-blue-600 hover:bg-blue-100']">
+                            <i class="fas fa-book-open mr-1"></i>学业卓友
+                        </button>
+                        <button @click="agentPersona = 'lindaidai'" :class="['px-4 py-2 rounded-lg text-sm font-medium transition', agentPersona === 'lindaidai' ? 'bg-pink-500 text-white' : 'bg-pink-50 text-pink-600 hover:bg-pink-100']">
+                            <i class="fas fa-theater-masks mr-1"></i>林黛玉
+                        </button>
+                        <button @click="agentPersona = ''" :class="['px-4 py-2 rounded-lg text-sm font-medium transition', agentPersona === '' ? 'bg-purple-500 text-white' : 'bg-gray-100 text-gray-600 hover:bg-gray-200']">
+                            <i class="fas fa-robot mr-1"></i>通用助手
+                        </button>
+                    </div>
+                    
                     <!-- 聊天容器 -->
-                    <div class="flex-1 bg-white rounded-2xl shadow-sm border border-gray-100 flex flex-col overflow-hidden">
-                        <!-- 消息列表 -->
-                        <div class="flex-1 overflow-hidden relative">
+                    <div class="flex-1 bg-white flex flex-col overflow-hidden">
+                        <!-- 消息列表（固定高度，可滚动） -->
+                        <div ref="agentChatContainer" class="flex-1 overflow-y-auto p-6" style="height: calc(100vh - 320px); min-height: 300px;">
                             <!-- 欢迎语 -->
-                            <div v-if="agentMessages.length <= 1" class="absolute inset-0 flex items-center justify-center">
+                            <div v-if="agentMessages.length <= 1" class="h-full flex items-center justify-center">
                                 <div class="text-center">
-                                    <div class="w-20 h-20 mx-auto mb-4 rounded-2xl bg-gradient-to-br from-purple-100 to-indigo-100 flex items-center justify-center">
-                                        <i class="fas fa-comments text-3xl text-purple-500"></i>
+                                    <div :class="['w-20 h-20 mx-auto mb-4 rounded-2xl flex items-center justify-center', agentPersona === 'lindaidai' ? 'bg-gradient-to-br from-pink-100 to-red-100' : agentPersona === 'xueshuzhuoyou' ? 'bg-gradient-to-br from-blue-100 to-indigo-100' : 'bg-gradient-to-br from-purple-100 to-indigo-100']">
+                                        <i :class="['fas text-3xl', agentPersona === 'lindaidai' ? 'fa-theater-masks text-pink-500' : agentPersona === 'xueshuzhuoyou' ? 'fa-book-open text-blue-500' : 'fa-comments text-purple-500']"></i>
                                     </div>
-                                    <h3 class="text-xl font-semibold text-gray-700 mb-2">{{ agentPersona === 'lindaidai' ? '林黛玉在此恭候' : '开始智能对话' }}</h3>
-                                    <p class="text-gray-500">{{ agentPersona === 'lindaidai' ? '侬可以问我诗词、人生、情感，或者只是想聊聊天～' : '输入您的问题，AI将智能分析并调用合适的工具来回答' }}</p>
+                                    <h3 class="text-xl font-semibold text-gray-700 mb-2">{{ agentPersona === 'lindaidai' ? '林黛玉在此恭候' : agentPersona === 'xueshuzhuoyou' ? '学业卓友恭候赐教' : '开始智能对话' }}</h3>
+                                    <p class="text-gray-500 max-w-md mx-auto">{{ agentPersona === 'lindaidai' ? '侬可以问我诗词、人生、情感，或者只是想聊聊天～' : agentPersona === 'xueshuzhuoyou' ? '飞花令、对对联、诗词鉴赏、作文点评，皆可探讨～' : '输入您的问题，AI将智能分析并调用合适的工具来回答' }}</p>
                                 </div>
                             </div>
                             
                             <!-- 消息内容 -->
-                            <div ref="agentChatContainer" class="absolute inset-0 overflow-y-auto p-6" :class="{'invisible': agentMessages.length <= 1}">
-                                <div class="max-w-4xl mx-auto space-y-4">
-                                    <div v-for="msg in agentMessages" :key="msg.id" :class="['flex gap-3', msg.role === 'user' ? 'flex-row-reverse' : 'flex-row']">
-                                        <div :class="['w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden', msg.role === 'user' ? 'bg-blue-500' : (agentPersona === 'lindaidai' ? 'bg-gradient-to-br from-pink-400 to-red-400' : 'bg-gradient-to-br from-purple-500 to-indigo-500')]">
-                                            <img v-if="msg.role === 'ai' && agentPersona === 'lindaidai'" :src="'/static/lin.jpg'" class="w-full h-full object-cover">
-                                            <i v-else :class="['fas', msg.role === 'user' ? 'fa-user' : 'fa-robot']"></i>
-                                        </div>
-                                        <div :class="['max-w-[70%] px-4 py-3 rounded-2xl', msg.role === 'user' ? 'bg-blue-500 text-white rounded-tr-sm' : 'bg-gray-100 text-gray-800 rounded-tl-sm']">
-                                            <div v-if="msg.tools_used" class="mb-2">
-                                                <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-600">
-                                                    <i class="fas fa-tools"></i> {{ msg.model_used || 'Agent' }}
-                                                </span>
-                                            </div>
-                                            <div v-html="formatMessage(msg.content)"></div>
-                                        </div>
+                            <div v-else class="max-w-4xl mx-auto space-y-4 pb-4">
+                                <div v-for="msg in agentMessages" :key="msg.id" :class="['flex gap-3', msg.role === 'user' ? 'flex-row-reverse' : 'flex-row']">
+                                    <div :class="['w-10 h-10 rounded-xl flex items-center justify-center flex-shrink-0 overflow-hidden', msg.role === 'user' ? 'bg-blue-500' : (agentPersona === 'lindaidai' ? 'bg-gradient-to-br from-pink-400 to-red-400' : agentPersona === 'xueshuzhuoyou' ? 'bg-gradient-to-br from-blue-500 to-indigo-500' : 'bg-gradient-to-br from-purple-500 to-indigo-500')]">
+                                        <img v-if="msg.role === 'ai' && agentPersona === 'lindaidai'" :src="'/static/lin.jpg'" class="w-full h-full object-cover">
+                                        <i v-else :class="['fas', msg.role === 'user' ? 'fa-user' : 'fa-robot']"></i>
                                     </div>
-                                    <!-- 加载中 -->
-                                    <div v-if="agentLoading" class="flex gap-3">
-                                        <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-purple-500 to-indigo-500 flex items-center justify-center">
-                                            <i class="fas fa-robot text-white"></i>
+                                    <div :class="['max-w-[70%] px-4 py-3 rounded-2xl', msg.role === 'user' ? 'bg-blue-500 text-white rounded-tr-sm' : 'bg-gray-100 text-gray-800 rounded-tl-sm']">
+                                        <div v-if="msg.tools_used" class="mb-2">
+                                            <span class="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs bg-green-100 text-green-600">
+                                                <i class="fas fa-tools"></i> {{ msg.model_used || 'Agent' }}
+                                            </span>
                                         </div>
-                                        <div class="bg-gray-100 px-4 py-3 rounded-2xl rounded-tl-sm">
-                                            <div class="flex gap-1">
-                                                <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></span>
-                                                <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></span>
-                                                <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></span>
-                                            </div>
+                                        <div v-html="formatMessage(msg.content)"></div>
+                                    </div>
+                                </div>
+                                <!-- 加载中 -->
+                                <div v-if="agentLoading" class="flex gap-3">
+                                    <div :class="['w-10 h-10 rounded-xl flex items-center justify-center', agentPersona === 'lindaidai' ? 'bg-gradient-to-br from-pink-400 to-red-400' : agentPersona === 'xueshuzhuoyou' ? 'bg-gradient-to-br from-blue-500 to-indigo-500' : 'bg-gradient-to-br from-purple-500 to-indigo-500']">
+                                        <i class="fas fa-robot text-white"></i>
+                                    </div>
+                                    <div class="bg-gray-100 px-4 py-3 rounded-2xl rounded-tl-sm">
+                                        <div class="flex gap-1">
+                                            <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce"></span>
+                                            <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.1s"></span>
+                                            <span class="w-2 h-2 bg-gray-400 rounded-full animate-bounce" style="animation-delay: 0.2s"></span>
                                         </div>
                                     </div>
                                 </div>
                             </div>
                         </div>
                         
-                        <!-- 输入框 -->
-                        <div class="p-4 border-t border-gray-100">
+                        <!-- 输入框（固定在底部） -->
+                        <div class="flex-shrink-0 p-4 border-t border-gray-100 bg-white">
                             <div class="max-w-4xl mx-auto">
-                                <div class="flex gap-3 items-center bg-gray-50 rounded-2xl px-4 py-2 border border-gray-200 focus-within:border-purple-400 focus-within:bg-white transition">
-                                    <input type="text" v-model="agentQuestion" @keyup.enter="sendAgentQuestion" :placeholder="agentPersona === 'lindaidai' ? '和林黛玉说点什么...' : '输入问题，按回车发送...'" :disabled="agentLoading" class="flex-1 bg-transparent outline-none text-gray-700">
-                                    <button @click="sendAgentQuestion" :disabled="agentLoading || !agentQuestion.trim()" class="w-10 h-10 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 text-white flex items-center justify-center hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition">
+                                <div class="flex gap-3 items-center bg-gray-50 rounded-2xl px-4 py-3 border border-gray-200 focus-within:border-purple-400 transition">
+                                    <input type="text" v-model="agentQuestion" @keyup.enter="sendAgentQuestion" :placeholder="agentPersona === 'lindaidai' ? '和林黛玉说点什么...' : agentPersona === 'xueshuzhuoyou' ? '探讨诗词文章，或开始飞花令...' : '输入问题，按回车发送...'" :disabled="agentLoading" class="flex-1 bg-transparent outline-none text-gray-700 text-base">
+                                    <button @click="sendAgentQuestion" :disabled="agentLoading || !agentQuestion.trim()" class="w-12 h-12 rounded-xl bg-gradient-to-r from-purple-500 to-indigo-500 text-white flex items-center justify-center hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-md">
                                         <i class="fas fa-paper-plane"></i>
                                     </button>
                                 </div>
                             </div>
                         </div>
+                    </div>
+                </div>
+                <div v-if="showHomeworkDialog" class="fixed inset-0 bg-black/50 flex items-center justify-center z-50">
+                    <div class="bg-white rounded-2xl w-full max-w-2xl mx-4 overflow-hidden">
+                        <div class="bg-gradient-to-r from-blue-500 to-indigo-500 px-6 py-4 flex justify-between items-center">
+                            <h3 class="text-lg font-semibold text-white">提交作文/作业</h3>
+                            <button @click="showHomeworkDialog = false" class="text-white hover:bg-white/20 rounded-lg p-1">
+                                <i class="fas fa-times"></i>
+                            </button>
+                        </div>
+                        <div class="p-6 space-y-4">
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">标题（可选）</label>
+                                <input type="text" v-model="homeworkForm.title" placeholder="给作文起个标题" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                            </div>
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">作业类型</label>
+                                <select v-model="homeworkForm.type" class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none">
+                                    <option value="composition">作文</option>
+                                    <option value="reading">阅读笔记</option>
+                                    <option value="poetry">诗歌创作</option>
+                                    <option value="essay">随笔</option>
+                                </select>
+                            </div>
+                            
+                            <!-- 文件上传区域 -->
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">上传作业文件（可选）</label>
+                                <div class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition cursor-pointer" 
+                                     @click="$refs.fileInput.click()"
+                                     @dragover.prevent="homeworkDragOver = true"
+                                     @dragleave.prevent="homeworkDragOver = false"
+                                     @drop.prevent="handleHomeworkFileDrop"
+                                     :class="{'border-blue-400 bg-blue-50': homeworkDragOver}">
+                                    <input type="file" 
+                                           ref="fileInput" 
+                                           accept=".txt,.pdf,.docx" 
+                                           @change="handleHomeworkFileSelect" 
+                                           class="hidden">
+                                    <div v-if="!homeworkForm.selectedFile">
+                                        <i class="fas fa-cloud-upload-alt text-4xl text-gray-400 mb-2"></i>
+                                        <p class="text-gray-500 text-sm">点击选择文件或将文件拖到此处</p>
+                                        <p class="text-gray-400 text-xs mt-1">支持 TXT、PDF、DOCX 格式</p>
+                                    </div>
+                                    <div v-else class="flex items-center justify-center gap-3">
+                                        <i class="fas fa-file text-2xl text-blue-500"></i>
+                                        <div class="text-left">
+                                            <p class="text-gray-700 font-medium">{{ homeworkForm.selectedFile.name }}</p>
+                                            <p class="text-gray-400 text-xs">{{ (homeworkForm.selectedFile.size / 1024).toFixed(1) }} KB</p>
+                                        </div>
+                                        <button @click.stop="homeworkForm.selectedFile = null" class="text-red-500 hover:text-red-600 ml-2">
+                                            <i class="fas fa-times-circle"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            
+                            <!-- 内容预览（如果上传了文件） -->
+                            <div v-if="homeworkForm.extractedContent">
+                                <label class="block text-sm font-medium text-gray-700 mb-1">
+                                    <i class="fas fa-file-alt mr-1 text-green-500"></i>文件内容预览
+                                </label>
+                                <div class="bg-gray-50 border rounded-lg p-3 max-h-40 overflow-y-auto">
+                                    <p class="text-gray-600 text-sm whitespace-pre-wrap">{{ homeworkForm.extractedContent.substring(0, 500) }}{{ homeworkForm.extractedContent.length > 500 ? '...' : '' }}</p>
+                                </div>
+                                <p class="text-xs text-gray-400 mt-1">共 {{ homeworkForm.extractedContent.length }} 个字符，已自动填入内容框</p>
+                            </div>
+                            
+                            <div>
+                                <label class="block text-sm font-medium text-gray-700 mb-1">
+                                    {{ homeworkForm.selectedFile ? '内容（可编辑）' : '内容' }}
+                                </label>
+                                <textarea v-model="homeworkForm.content" rows="8" placeholder="在此输入您的作文内容..." class="w-full px-4 py-2 border rounded-lg focus:ring-2 focus:ring-blue-500 outline-none resize-none"></textarea>
+                            </div>
+                            <div class="flex justify-end gap-3">
+                                <button @click="showHomeworkDialog = false" class="px-4 py-2 text-gray-600 hover:bg-gray-100 rounded-lg transition">取消</button>
+                                <button @click="submitHomework" :disabled="!homeworkForm.content.trim() || homeworkSubmitting" class="px-6 py-2 bg-blue-500 hover:bg-blue-600 text-white rounded-lg transition disabled:opacity-50 flex items-center gap-2">
+                                    <span v-if="homeworkSubmitting"><i class="fas fa-spinner fa-spin"></i> 上传中...</span>
+                                    <span v-else><i class="fas fa-paper-plane mr-1"></i>提交并求点评</span>
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- ========== 心理疏导 ========== -->
+                <div v-if="activeTab === 'psychology'" class="h-[calc(100vh-160px)] flex flex-col">
+                    <!-- 顶部标题区 -->
+                    <div class="bg-gradient-to-r from-pink-50 to-purple-50 rounded-2xl p-6 mb-6 border border-pink-100">
+                        <div class="flex items-center gap-4 mb-4">
+                            <div class="w-16 h-16 rounded-2xl bg-gradient-to-br from-pink-400 to-purple-400 flex items-center justify-center">
+                                <i class="fas fa-heart text-2xl text-white"></i>
+                            </div>
+                            <div>
+                                <h2 class="text-xl font-semibold text-gray-800">情绪疏导与心理陪伴</h2>
+                                <p class="text-sm text-gray-500">在这里，你可以放心倾诉，我会用心倾听、温柔陪伴</p>
+                            </div>
+                            <button v-if="psychologyMessages.length > 1" @click="initPsychologyMessages" class="ml-auto px-4 py-2 text-sm bg-white hover:bg-pink-50 rounded-lg transition text-pink-600 border border-pink-200">
+                                <i class="fas fa-redo mr-1"></i>重新开始
+                            </button>
+                        </div>
+                        <!-- 情绪标签 -->
+                        <div class="flex flex-wrap gap-2">
+                            <span class="text-sm text-gray-500 mr-2">当前心情：</span>
+                            <button v-for="tag in emotionTags" :key="tag" 
+                                    @click="selectedEmotion = selectedEmotion === tag ? '' : tag"
+                                    :class="['px-3 py-1 rounded-full text-sm transition', selectedEmotion === tag ? 'bg-gradient-to-r from-pink-500 to-purple-500 text-white' : 'bg-white text-gray-600 hover:bg-pink-50 border border-pink-200']">
+                                {{ tag }}
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- 聊天区域 -->
+                    <div class="flex-1 overflow-y-auto space-y-4 mb-4 px-1" ref="psychologyChatContainer">
+                        <div v-for="msg in psychologyMessages" :key="msg.id" class="flex" :class="msg.role === 'user' ? 'justify-end' : 'justify-start'">
+                            <div v-if="msg.role === 'ai'" class="flex gap-3 max-w-[80%]">
+                                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-400 to-purple-400 flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-heart text-white"></i>
+                                </div>
+                                <div class="bg-white rounded-2xl rounded-tl-none p-4 shadow-sm border border-gray-100">
+                                    <p class="text-gray-700 whitespace-pre-wrap leading-relaxed">{{ msg.content }}</p>
+                                </div>
+                            </div>
+                            <div v-else class="max-w-[80%] bg-gradient-to-r from-pink-500 to-purple-500 rounded-2xl rounded-tr-none p-4 shadow-sm">
+                                <p class="text-white whitespace-pre-wrap leading-relaxed">{{ msg.content }}</p>
+                            </div>
+                        </div>
+                        <div v-if="psychologyLoading" class="flex justify-start">
+                            <div class="flex gap-3 max-w-[80%]">
+                                <div class="w-10 h-10 rounded-xl bg-gradient-to-br from-pink-400 to-purple-400 flex items-center justify-center flex-shrink-0">
+                                    <i class="fas fa-heart text-white"></i>
+                                </div>
+                                <div class="bg-white rounded-2xl rounded-tl-none p-4 shadow-sm border border-gray-100">
+                                    <div class="flex gap-1">
+                                        <span class="w-2 h-2 bg-pink-400 rounded-full animate-bounce" style="animation-delay: 0ms"></span>
+                                        <span class="w-2 h-2 bg-pink-400 rounded-full animate-bounce" style="animation-delay: 150ms"></span>
+                                        <span class="w-2 h-2 bg-pink-400 rounded-full animate-bounce" style="animation-delay: 300ms"></span>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 输入区域 -->
+                    <div class="bg-white rounded-2xl p-4 shadow-sm border border-gray-100">
+                        <div class="flex gap-3">
+                            <textarea v-model="psychologyQuestion" @keyup.enter.exact.prevent="sendPsychologyQuestion" 
+                                      placeholder="在这里倾诉你的心事..." :disabled="psychologyLoading"
+                                      rows="2" class="flex-1 px-4 py-3 border border-gray-200 rounded-xl focus:ring-2 focus:ring-pink-300 focus:border-pink-300 outline-none resize-none text-base"></textarea>
+                            <button @click="sendPsychologyQuestion" :disabled="psychologyLoading || !psychologyQuestion.trim()" 
+                                    class="w-14 h-14 rounded-xl bg-gradient-to-r from-pink-500 to-purple-500 text-white flex items-center justify-center hover:opacity-90 disabled:opacity-50 disabled:cursor-not-allowed transition shadow-md self-end">
+                                <i class="fas fa-paper-plane"></i>
+                            </button>
+                        </div>
+                        <p class="text-xs text-gray-400 mt-2 text-center">
+                            <i class="fas fa-lock mr-1"></i>你的倾诉会被温柔以待，内容仅用于提供心理陪伴
+                        </p>
                     </div>
                 </div>
 
@@ -2183,8 +2344,10 @@ const app = createApp({
         const authMode = ref('login');
         const authUsername = ref('');
         const authPassword = ref('');
+        const authRole = ref('student');  // 注册时的角色
         const authLoading = ref(false);
-        const activeTab = ref('dashboard');
+        const currentUser = ref({ role: '' });  // 当前登录用户信息
+        const activeTab = ref('agent');
         const mgmtTab = ref('student');
         
         // 页面标题
@@ -2193,6 +2356,7 @@ const app = createApp({
                 'dashboard': '数据看板',
                 'query': '基础查询',
                 'agent': 'Agent助手',
+                'psychology': '心理疏导',
                 'statistics': '高级统计',
                 'knowledge': '知识库管理',
                 'management': '数据管理'
@@ -2231,8 +2395,88 @@ const app = createApp({
         const agentQuestion = ref('');
         const agentLoading = ref(false);
         const agentChatContainer = ref(null);
-        const agentSessionId = ref(null);
-        const agentPersona = ref(''); // 人格设置：lindaidai=林黛玉
+        const agentSessionId = ref(localStorage.getItem('agent_session_id') || null);
+        const agentPersona = ref(''); // 人格设置：lindaidai=林黛玉, xueshuzhuoyou=学业卓友
+        
+        // 心理疏导（聊天记录按用户独立存储）
+        const studentPsychologyWelcome = '亲爱的同学，你好。我是你的心理陪伴者。在这里，你可以放心地倾诉自己的烦恼和心事。无论是学习的压力、人际关系的困扰，还是生活中的种种不如意，我都会用心倾听、温柔陪伴。让我们一起聊聊，好吗？';
+        const teacherPsychologyWelcome = '您好，老师。我是您的心理工作助手。我可以协助您关注学生的心理健康状态，探讨教育过程中的心理疏导策略，或者分享一些学生心理工作的经验和方法。愿我们能一起为学生的健康成长贡献一份力量。';
+        const psychologyWelcome = computed(() => currentUser.value.role === 'teacher' ? teacherPsychologyWelcome : studentPsychologyWelcome);
+        const psychologyQuestion = ref('');
+        const psychologyLoading = ref(false);
+        const psychologyChatContainer = ref(null);
+        const studentEmotionTags = ref(['😊 开心', '😢 难过', '😰 焦虑', '😡 生气', '😔 失落', '🤔 迷茫']);
+        const teacherEmotionTags = ref(['😊 愉悦', '😰 压力', '😔 疲惫', '😡 无奈', '🤔 困惑', '😤 焦虑']);
+        const emotionTags = computed(() => currentUser.value.role === 'teacher' ? teacherEmotionTags.value : studentEmotionTags.value);
+        const selectedEmotion = ref('');
+        const psychologyRole = computed(() => currentUser.value.role === 'teacher' ? 'teacher' : 'student');
+        
+        // 获取当前用户的聊天存储键
+        const getPsychologyStorageKey = () => 'psychology_messages_' + (currentUser.value?.id || currentUser.value?.username || 'guest');
+        
+        // 加载心理疏导聊天记录（从 localStorage）
+        const loadPsychologyMessages = () => {
+            const key = getPsychologyStorageKey();
+            const stored = localStorage.getItem(key);
+            if (stored) {
+                try {
+                    return JSON.parse(stored);
+                } catch {
+                    return null;
+                }
+            }
+            return null;
+        };
+        
+        // 保存心理疏导聊天记录（到 localStorage）
+        const savePsychologyMessages = (messages) => {
+            const key = getPsychologyStorageKey();
+            localStorage.setItem(key, JSON.stringify(messages));
+        };
+        
+        // 响应式聊天记录
+        const psychologyMessages = ref(loadPsychologyMessages() || [{
+            id: 1,
+            role: 'ai',
+            content: psychologyWelcome.value
+        }]);
+        
+        // 监听聊天记录变化，自动保存
+        watch(psychologyMessages, (newMessages) => {
+            savePsychologyMessages(newMessages);
+        }, { deep: true });
+        
+        // 用户切换时，重新加载当前用户的聊天记录
+        watch(currentUser, (newUser, oldUser) => {
+            if (newUser && newUser !== oldUser) {
+                const stored = loadPsychologyMessages();
+                if (stored && stored.length > 0) {
+                    psychologyMessages.value = stored;
+                } else {
+                    psychologyMessages.value = [{
+                        id: 1,
+                        role: 'ai',
+                        content: psychologyWelcome.value
+                    }];
+                }
+                selectedEmotion.value = '';
+            }
+        });
+        
+        // 初始化心理疏导消息
+        const initPsychologyMessages = () => {
+            psychologyMessages.value = [{
+                id: 1,
+                role: 'ai',
+                content: psychologyWelcome.value
+            }];
+        };
+        
+        // 作业提交
+        const showHomeworkDialog = ref(false);
+        const homeworkForm = ref({ title: '', type: 'composition', content: '', selectedFile: null, extractedContent: '' });
+        const homeworkSubmitting = ref(false);
+        const homeworkDragOver = ref(false);
         
         // 数据管理
         const mgmtLoading = ref(false);
@@ -2329,7 +2573,20 @@ const app = createApp({
         };
         
         const resetSessionId = () => {
-            currentSessionId.value = null;
+            // 用户级记忆：从 localStorage 读取或创建 session_id
+            const storedId = localStorage.getItem('user_session_id');
+            if (storedId) {
+                currentSessionId.value = storedId;
+                agentSessionId.value = storedId;
+            } else {
+                const newId = 'user-' + Date.now() + '-' + Math.random().toString(36).substr(2, 9);
+                localStorage.setItem('user_session_id', newId);
+                localStorage.setItem('agent_session_id', newId);
+                currentSessionId.value = newId;
+                agentSessionId.value = newId;
+            }
+            // Agent 也用同一个 session_id
+            agentSessionId.value = currentSessionId.value;
         };
         
         // ============================================
@@ -2355,15 +2612,25 @@ const app = createApp({
                     console.log('[Login] Success', res.data);
                     localStorage.setItem('access_token', res.data.access_token);
                     setAuthToken(res.data.access_token);
+                    currentUser.value = {
+                        username: res.data.username,
+                        role: res.data.role,
+                        student_id: res.data.student_id,
+                        teacher_id: res.data.teacher_id
+                    };
+                    localStorage.setItem('current_user', JSON.stringify(currentUser.value));
                     isLoggedIn.value = true;
+                    // 初始化用户级 session_id（持久化）
                     resetSessionId();
-                    await refreshDashboard();
-                    await loadManagementData();
+                    // 加载数据（不阻塞界面切换）
+                    refreshDashboard().catch(err => console.error('加载看板数据失败:', err));
+                    loadManagementData().catch(err => console.error('加载管理数据失败:', err));
                 } else {
                     console.log('[Register] Sending register request');
                     await axios.post('/auth/register', {
                         username: authUsername.value,
-                        password: authPassword.value
+                        password: authPassword.value,
+                        role: authRole.value
                     });
                     console.log('[Register] Success');
                     ElMessage.success('注册成功，请登录');
@@ -2380,18 +2647,41 @@ const app = createApp({
         
         const logout = () => {
             localStorage.removeItem('access_token');
+            localStorage.removeItem('current_user');
+            // 登出时清除 session_id，新用户登录会创建新的
+            localStorage.removeItem('user_session_id');
+            localStorage.removeItem('agent_session_id');
             setAuthToken(null);
             isLoggedIn.value = false;
-            resetSessionId();
+            currentUser.value = { role: '' };
+            currentSessionId.value = null;
+            agentSessionId.value = null;
+            // 清空聊天记录
+            agentMessages.value = [{
+                id: 1, 
+                role: 'ai', 
+                content: '您好！我是智能助手，有什么可以帮您的？'
+            }];
+            chatMessages.value = [{
+                id: 1,
+                role: 'ai',
+                type: 'text',
+                content: '您好！我是数据查询助手，可以问学生、班级、成绩、就业等数据问题。'
+            }];
         };
         
         const checkLogin = () => {
+            // 修复：每次进入页面都显示登录界面，需重新登录
+            // 保留 token 用于后续登录验证，但不自动登录
             const token = localStorage.getItem('access_token');
             if (token) {
                 setAuthToken(token);
-                isLoggedIn.value = true;
-                resetSessionId();
+                // 不自动登录，显示登录界面让用户确认
+                // 如果 token 有效，登录时后端会验证
             }
+            // 确保显示登录界面
+            isLoggedIn.value = false;
+            currentUser.value = { role: '' };
         };
         
         // ============================================
@@ -2400,13 +2690,18 @@ const app = createApp({
         const loadDashboardData = async () => {
             try {
                 const res = await axios.get('/statistics/dashboard');
-                const data = res.data.data;
+                const data = res.data.data || {};
                 dashboard.value = {
                     studentCount: data.total_students || 0,
                     classCount: data.total_classes || 0,
                     avgAge: data.avg_age || 0,
                     employmentRate: data.employment_rate || 0,
-                    topSalary: data.top_salary || []
+                    topSalary: (data.top_salary || []).map(item => ({
+                        stu_name: item.stu_name || '未知',
+                        class_name: item.class_name || '未知',
+                        salary: item.salary || 0,
+                        company: item.company || '未知'
+                    }))
                 };
             } catch (err) {
                 console.error(err);
@@ -2419,38 +2714,46 @@ const app = createApp({
                     axios.get('/statistics/classes/gender-stat'),
                     axios.get('/statistics/advanced/class-avg-score-rank')
                 ]);
-                await nextTick();
                 
-                if (genderChart) genderChart.dispose();
-                if (scoreChart) scoreChart.dispose();
-                
-                genderChart = echarts.init(document.getElementById('genderChart'));
-                scoreChart = echarts.init(document.getElementById('scoreChart'));
-                
-                genderChart.setOption({
-                    tooltip: { trigger: 'axis' },
-                    legend: { data: ['男生', '女生'], bottom: 0 },
-                    xAxis: { type: 'category', data: genderRes.data.data.map(c => c.class_name), axisLabel: { rotate: 30 } },
-                    yAxis: { type: 'value', name: '人数' },
-                    series: [
-                        { name: '男生', type: 'bar', data: genderRes.data.data.map(c => c.male), itemStyle: { color: '#3b82f6' }, barRadius: [4, 4, 0, 0] },
-                        { name: '女生', type: 'bar', data: genderRes.data.data.map(c => c.female), itemStyle: { color: '#ec4899' }, barRadius: [4, 4, 0, 0] }
-                    ],
-                    grid: { containLabel: true }
-                });
-                
-                scoreChart.setOption({
-                    tooltip: { trigger: 'axis' },
-                    xAxis: { type: 'category', data: scoreRes.data.data.map(d => d.class_name), axisLabel: { rotate: 30 } },
-                    yAxis: { type: 'value', name: '平均分' },
-                    series: [{
-                        type: 'bar',
-                        data: scoreRes.data.data.map(d => d.avg_score),
-                        itemStyle: { color: '#10b981', borderRadius: [4, 4, 0, 0] },
-                        barWidth: '50%'
-                    }],
-                    grid: { containLabel: true }
-                });
+                // 多次等待确保 DOM 渲染
+                for (let i = 0; i < 10; i++) {
+                    await new Promise(r => setTimeout(r, 100));
+                    const genderEl = document.getElementById('genderChart');
+                    const scoreEl = document.getElementById('scoreChart');
+                    if (genderEl && scoreEl) {
+                        if (genderChart) genderChart.dispose();
+                        if (scoreChart) scoreChart.dispose();
+                        genderChart = echarts.init(genderEl);
+                        scoreChart = echarts.init(scoreEl);
+                        
+                        genderChart.setOption({
+                            tooltip: { trigger: 'axis' },
+                            legend: { data: ['男生', '女生'], bottom: 0 },
+                            xAxis: { type: 'category', data: genderRes.data.data.map(c => c.class_name), axisLabel: { rotate: 30 } },
+                            yAxis: { type: 'value', name: '人数' },
+                            series: [
+                                { name: '男生', type: 'bar', data: genderRes.data.data.map(c => c.male), itemStyle: { color: '#3b82f6' }, barRadius: [4, 4, 0, 0] },
+                                { name: '女生', type: 'bar', data: genderRes.data.data.map(c => c.female), itemStyle: { color: '#ec4899' }, barRadius: [4, 4, 0, 0] }
+                            ],
+                            grid: { containLabel: true }
+                        });
+                        
+                        scoreChart.setOption({
+                            tooltip: { trigger: 'axis' },
+                            xAxis: { type: 'category', data: scoreRes.data.data.map(d => d.class_name), axisLabel: { rotate: 30 } },
+                            yAxis: { type: 'value', name: '平均分' },
+                            series: [{
+                                type: 'bar',
+                                data: scoreRes.data.data.map(d => d.avg_score),
+                                itemStyle: { color: '#10b981', borderRadius: [4, 4, 0, 0] },
+                                barWidth: '50%'
+                            }],
+                            grid: { containLabel: true }
+                        });
+                        return;
+                    }
+                }
+                console.warn('Chart containers not found after retries');
             } catch (err) {
                 console.error(err);
             }
@@ -2983,6 +3286,237 @@ const app = createApp({
         // ============================================
         // Agent 助手 (流式输出)
         // ============================================
+        
+        // 处理作业文件选择
+        const handleHomeworkFileSelect = async (event) => {
+            const file = event.target.files[0];
+            if (file) {
+                await processHomeworkFile(file);
+            }
+        };
+        
+        // 处理作业文件拖放
+        const handleHomeworkFileDrop = async (event) => {
+            homeworkDragOver.value = false;
+            const file = event.dataTransfer.files[0];
+            if (file) {
+                await processHomeworkFile(file);
+            }
+        };
+        
+        // 处理作业文件
+        const processHomeworkFile = async (file) => {
+            const validTypes = ['text/plain', 'application/pdf', 'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+            const validExtensions = ['.txt', '.pdf', '.docx'];
+            const ext = '.' + file.name.split('.').pop().toLowerCase();
+            
+            if (!validExtensions.includes(ext)) {
+                alert('不支持的文件格式！仅支持 TXT、PDF、DOCX 格式。');
+                return;
+            }
+            
+            // 检查文件大小（限制10MB）
+            if (file.size > 10 * 1024 * 1024) {
+                alert('文件太大！请上传小于10MB的文件。');
+                return;
+            }
+            
+            homeworkForm.value.selectedFile = file;
+            
+            // 读取文件内容
+            try {
+                let content = '';
+                if (ext === '.txt') {
+                    content = await file.text();
+                } else if (ext === '.pdf') {
+                    // PDF需要后端解析
+                    content = '[PDF文件已上传，内容将在提交后自动提取]';
+                    ElMessage.info('PDF文件已选择，将在提交时自动提取内容');
+                } else if (ext === '.docx') {
+                    // DOCX需要后端解析
+                    content = '[Word文档已上传，内容将在提交后自动提取]';
+                    ElMessage.info('Word文档已选择，将在提交时自动提取内容');
+                }
+                
+                homeworkForm.value.extractedContent = content;
+                // 自动填入内容框（如果是纯文本）
+                if (ext === '.txt') {
+                    homeworkForm.value.content = content;
+                }
+            } catch (err) {
+                console.error('读取文件失败:', err);
+                alert('读取文件失败，请重试！');
+                homeworkForm.value.selectedFile = null;
+            }
+        };
+        
+        // 提交作业
+        const submitHomework = async () => {
+            if (!homeworkForm.value.content.trim()) {
+                ElMessage.error('请填写作业内容！');
+                return;
+            }
+
+            // 检查是否为学生账号
+            if (currentUser.value.role !== 'student') {
+                ElMessage.error('提交作业需要使用学生账号，请切换账号登录！');
+                return;
+            }
+
+            homeworkSubmitting.value = true;
+
+            try {
+                const token = localStorage.getItem('access_token');
+                let res;
+
+                // 如果有选择文件，使用文件上传接口
+                if (homeworkForm.value.selectedFile) {
+                    const formData = new FormData();
+                    formData.append('file', homeworkForm.value.selectedFile);
+                    formData.append('title', homeworkForm.value.title || '');
+                    formData.append('homework_type', homeworkForm.value.type);
+
+                    res = await axios.post('/homework/upload', formData, {
+                        headers: {
+                            'Authorization': `Bearer ${token}`,
+                            'Content-Type': 'multipart/form-data'
+                        }
+                    });
+                } else {
+                    // 没有文件，使用普通提交接口
+                    res = await axios.post('/homework/submit', {
+                        title: homeworkForm.value.title,
+                        content: homeworkForm.value.content,
+                        homework_type: homeworkForm.value.type
+                    }, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                }
+
+                if (res.data.code === 200) {
+                    showHomeworkDialog.value = false;
+                    // 清空表单
+                    homeworkForm.value = { title: '', type: 'composition', content: '', selectedFile: null, extractedContent: '' };
+
+                    // 将作业内容发送给学业卓友进行点评
+                    const hw = res.data.data || {};
+                    if (hw && hw.content) {
+                        const typeName = hw.homework_type === 'composition' ? '作文' : hw.homework_type === 'poetry' ? '诗歌' : hw.homework_type === 'reading' ? '阅读笔记' : '随笔';
+                        agentQuestion.value = `请帮我点评一下这篇${typeName}：\n\n【${hw.title || '无标题'}】\n\n${hw.content}`;
+                        await nextTick();
+                        sendAgentQuestion();
+                    }
+                    ElMessage.success('作业提交成功，等待学业卓友点评！');
+                } else {
+                    ElMessage.error(res.data.message || '提交失败');
+                }
+            } catch (err) {
+                console.error('提交作业失败:', err);
+                const errorDetail = err.response?.data?.detail || err.message || '未知错误';
+                if (err.response?.status === 403) {
+                    ElMessage.error('提交失败：只有学生账号才能提交作业');
+                } else if (err.response?.status === 401) {
+                    ElMessage.error('登录已过期，请重新登录');
+                } else {
+                    ElMessage.error('提交失败: ' + errorDetail);
+                }
+            } finally {
+                homeworkSubmitting.value = false;
+            }
+        };
+        
+        // 心理疏导
+        const scrollPsychologyToBottom = () => {
+            nextTick(() => {
+                if (psychologyChatContainer.value) {
+                    psychologyChatContainer.value.scrollTop = psychologyChatContainer.value.scrollHeight;
+                }
+            });
+        };
+        
+        const sendPsychologyQuestion = async () => {
+            if (!psychologyQuestion.value.trim() || psychologyLoading.value) return;
+            const question = psychologyQuestion.value;
+            psychologyMessages.value.push({ id: Date.now(), role: 'user', content: question });
+            psychologyQuestion.value = '';
+            psychologyLoading.value = true;
+            await nextTick();
+            scrollPsychologyToBottom();
+
+            try {
+                // 获取对话历史作为上下文
+                const context = psychologyMessages.value.slice(0, -1).map(msg => ({
+                    role: msg.role,
+                    content: msg.content
+                }));
+
+                // 创建 AI 消息占位
+                const aiMsgId = Date.now();
+                let currentAnswer = '';
+                psychologyMessages.value.push({
+                    id: aiMsgId,
+                    role: 'ai',
+                    content: ''
+                });
+
+                // 流式请求
+                const token = localStorage.getItem('access_token');
+                const response = await fetch('/agent/chat', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': token ? `Bearer ${token}` : ''
+                    },
+                    body: JSON.stringify({
+                        question,
+                        persona: 'psychology_' + psychologyRole.value,
+                        emotion: selectedEmotion.value || '',
+                        context
+                    })
+                });
+
+                const reader = response.body.getReader();
+                const decoder = new TextDecoder();
+
+                while (true) {
+                    const { done, value } = await reader.read();
+                    if (done) break;
+
+                    const text = decoder.decode(value);
+                    const lines = text.split('\n');
+
+                    for (const line of lines) {
+                        if (line.startsWith('data: ')) {
+                            try {
+                                const data = JSON.parse(line.slice(6));
+
+                                if (data.type === 'answer') {
+                                    currentAnswer += data.content;
+                                    const msg = psychologyMessages.value.find(m => m.id === aiMsgId);
+                                    if (msg) msg.content = currentAnswer;
+                                    await nextTick();
+                                    scrollPsychologyToBottom();
+                                } else if (data.type === 'done') {
+                                    console.log('心理疏导对话完成');
+                                } else if (data.type === 'error') {
+                                    const msg = psychologyMessages.value.find(m => m.id === aiMsgId);
+                                    if (msg) msg.content = '抱歉，我现在有些疲惫，让我们稍后再聊好吗？';
+                                }
+                            } catch (e) {
+                                // 忽略解析错误
+                            }
+                        }
+                    }
+                }
+            } catch (err) {
+                psychologyMessages.value.push({ id: Date.now(), role: 'ai', content: '亲爱的，我感受到你现在有些困扰。网络的波动让我们暂时失去了连接，不过没关系，等你好些了，我们再继续聊。我一直在这里等你。' });
+            } finally {
+                psychologyLoading.value = false;
+                await nextTick();
+                scrollPsychologyToBottom();
+            }
+        };
+        
         const sendAgentQuestion = async () => {
             if (!agentQuestion.value.trim() || agentLoading.value) return;
             const question = agentQuestion.value;
@@ -3016,9 +3550,13 @@ const app = createApp({
                 });
 
                 // 流式请求
+                const token = localStorage.getItem('access_token');
                 const response = await fetch('/agent/chat', {
                     method: 'POST',
-                    headers: { 'Content-Type': 'application/json' },
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': token ? `Bearer ${token}` : ''
+                    },
                     body: JSON.stringify(payload)
                 });
 
@@ -3043,7 +3581,10 @@ const app = createApp({
                                     if (msg) {
                                         msg.model_used = data.model_used;
                                         msg.tools_used = data.tools_used;
-                                        if (data.session_id) agentSessionId.value = data.session_id;
+                                        if (data.session_id) {
+                                            agentSessionId.value = data.session_id;
+                                            localStorage.setItem('agent_session_id', data.session_id);
+                                        }
                                     }
                                 } else if (data.type === 'answer') {
                                     // 逐字追加内容
@@ -3253,18 +3794,13 @@ const app = createApp({
         
         onMounted(async () => {
             checkLogin();
-            if (isLoggedIn.value) {
-                await refreshDashboard();
-                await loadManagementData();
-                await loadStudents();
-            }
         });
         
         // ============================================
         // 返回
         // ============================================
         return {
-            isLoggedIn, authMode, authUsername, authPassword, submitAuth, logout,
+            isLoggedIn, authMode, authUsername, authPassword, authRole, authLoading, currentUser, submitAuth, logout,
             activeTab, mgmtTab, pageTitle,
             dashboard,
             chatMessages, currentQuestion, isLoading, sendQuestion, chatContainer,
@@ -3291,7 +3827,12 @@ const app = createApp({
             searchKnowledge, kbSearchQuery, kbSearchResults, kbSearchLoading,
             askKnowledge, kbChatMessages, kbChatLoading, kbCurrentQuestion, kbChatContainer,
             // Agent助手
-            agentMessages, agentQuestion, agentLoading, agentPersona, sendAgentQuestion, agentChatContainer, formatMessage
+            agentMessages, agentQuestion, agentLoading, agentPersona, sendAgentQuestion, agentChatContainer, formatMessage,
+            // 心理疏导
+            psychologyMessages, psychologyQuestion, psychologyLoading, psychologyChatContainer, sendPsychologyQuestion, emotionTags, selectedEmotion, initPsychologyMessages, psychologyRole,
+            // 作业提交
+            showHomeworkDialog, homeworkForm, homeworkSubmitting, homeworkDragOver,
+            submitHomework, handleHomeworkFileSelect, handleHomeworkFileDrop
         };
     }
 });

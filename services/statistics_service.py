@@ -33,14 +33,48 @@ class StatisticsService:
 
     @staticmethod
     def students_always_above_80(db: Session):
+        """优化：使用子查询一次性获取所有成绩，避免N+1问题"""
         from model.student import StuBasicInfo
         from model.exam_model import StuExamRecord
-        subquery = db.query(StuExamRecord.stu_id).filter(StuExamRecord.grade < 80, StuExamRecord.is_deleted == 0).distinct().subquery()
-        good_students = db.query(StuBasicInfo).filter(StuBasicInfo.is_deleted == False, StuBasicInfo.stu_id.notin_(subquery)).all()
-        result = []
-        for stu in good_students:
-            exams = db.query(StuExamRecord).filter(StuExamRecord.stu_id == stu.stu_id, StuExamRecord.is_deleted == 0).order_by(StuExamRecord.seq_no).all()
-            result.append({"stu_id": stu.stu_id, "stu_name": stu.stu_name, "grades": [{"seq_no": e.seq_no, "grade": e.grade, "exam_date": e.exam_date} for e in exams]})
+        
+        # 子查询：找出有低于80分记录的学生
+        subquery = db.query(StuExamRecord.stu_id).filter(
+            StuExamRecord.grade < 80, 
+            StuExamRecord.is_deleted == 0
+        ).distinct().subquery()
+        
+        # 查询优秀学生及其所有成绩（一次查询）
+        good_students = db.query(StuBasicInfo).filter(
+            StuBasicInfo.is_deleted == False, 
+            StuBasicInfo.stu_id.notin_(subquery)
+        ).all()
+        
+        stu_ids = [s.stu_id for s in good_students]
+        
+        # 批量获取所有成绩
+        all_exams = db.query(StuExamRecord).filter(
+            StuExamRecord.stu_id.in_(stu_ids),
+            StuExamRecord.is_deleted == 0
+        ).order_by(StuExamRecord.stu_id, StuExamRecord.seq_no).all()
+        
+        # 按学生分组
+        exams_by_student = {}
+        for exam in all_exams:
+            if exam.stu_id not in exams_by_student:
+                exams_by_student[exam.stu_id] = {
+                    "stu_name": next((s.stu_name for s in good_students if s.stu_id == exam.stu_id), ""),
+                    "grades": []
+                }
+            exams_by_student[exam.stu_id]["grades"].append({
+                "seq_no": exam.seq_no,
+                "grade": exam.grade,
+                "exam_date": exam.exam_date
+            })
+        
+        result = [
+            {"stu_id": sid, "stu_name": info["stu_name"], "grades": info["grades"]}
+            for sid, info in exams_by_student.items()
+        ]
         return {"code": 200, "count": len(result), "data": result}
 
     @staticmethod
@@ -61,15 +95,47 @@ class StatisticsService:
 
     @staticmethod
     def class_avg_per_exam(db: Session):
+        """优化：使用单次查询获取所有数据，避免循环查询"""
         from model.student import StuBasicInfo
         from model.exam_model import StuExamRecord
         from model.class_model import Class
-        seq_nos = db.query(distinct(StuExamRecord.seq_no)).filter(StuExamRecord.is_deleted == 0).order_by(StuExamRecord.seq_no).all()
-        seq_nos = [s[0] for s in seq_nos]
+        
+        # 一次性查询所有数据
+        all_data = db.query(
+            StuExamRecord.seq_no,
+            Class.class_id,
+            Class.class_name,
+            StuExamRecord.grade
+        ).join(StuBasicInfo, StuBasicInfo.class_id == Class.class_id).join(
+            StuExamRecord, StuExamRecord.stu_id == StuBasicInfo.stu_id
+        ).filter(
+            StuExamRecord.is_deleted == 0,
+            StuBasicInfo.is_deleted == False,
+            Class.is_deleted == False
+        ).all()
+        
+        # Python端聚合
+        from collections import defaultdict
+        data_by_seq = defaultdict(lambda: defaultdict(list))
+        
+        for row in all_data:
+            data_by_seq[row.seq_no][(row.class_id, row.class_name)].append(row.grade)
+        
+        # 计算平均值
         result_by_seq = {}
-        for seq in seq_nos:
-            avg_scores = db.query(Class.class_id, Class.class_name, func.avg(StuExamRecord.grade).label("avg_grade")).join(StuBasicInfo, StuBasicInfo.class_id == Class.class_id).join(StuExamRecord, StuExamRecord.stu_id == StuBasicInfo.stu_id).filter(StuExamRecord.seq_no == seq, StuExamRecord.is_deleted == 0, StuBasicInfo.is_deleted == False, Class.is_deleted == False).group_by(Class.class_id, Class.class_name).order_by(desc("avg_grade")).all()
-            result_by_seq[f"第{seq}次考试"] = [{"class_name": row.class_name, "avg_grade": round(row.avg_grade, 2)} for row in avg_scores]
+        for seq in sorted(data_by_seq.keys()):
+            class_grades = data_by_seq[seq]
+            avg_scores = []
+            for (class_id, class_name), grades in class_grades.items():
+                avg = sum(grades) / len(grades) if grades else 0
+                avg_scores.append({
+                    "class_name": class_name,
+                    "avg_grade": round(avg, 2)
+                })
+            # 按平均分排序
+            avg_scores.sort(key=lambda x: x["avg_grade"], reverse=True)
+            result_by_seq[f"第{seq}次考试"] = avg_scores
+        
         return {"code": 200, "data": result_by_seq}
 
     @staticmethod
@@ -110,12 +176,38 @@ class StatisticsService:
 
     @staticmethod
     def salary_distribution(db: Session):
+        """优化：使用CASE WHEN一次性查询，避免多次数据库往返"""
         from model.employment import Employment
-        bins = [(0, 5000, "<5k"), (5000, 8000, "5k-8k"), (8000, 12000, "8k-12k"), (12000, 20000, "12k-20k"), (20000, float('inf'), ">20k")]
-        result = []
-        for low, high, label in bins:
-            count = db.query(func.count(Employment.emp_id)).filter(Employment.is_deleted == False, Employment.salary >= low, Employment.salary < high if high != float('inf') else Employment.salary >= low).scalar()
-            result.append({"range": label, "count": count})
+        from sqlalchemy import case, literal_column
+        
+        # 使用数据库端CASE WHEN分组
+        salary_ranges = db.query(
+            case(
+                (Employment.salary < 5000, "<5k"),
+                (Employment.salary < 8000, "5k-8k"),
+                (Employment.salary < 12000, "8k-12k"),
+                (Employment.salary < 20000, "12k-20k"),
+                else_=">20k"
+            ).label("range"),
+            func.count(Employment.emp_id).label("count")
+        ).filter(
+            Employment.is_deleted == False,
+            Employment.salary.isnot(None)
+        ).group_by(
+            case(
+                (Employment.salary < 5000, "<5k"),
+                (Employment.salary < 8000, "5k-8k"),
+                (Employment.salary < 12000, "8k-12k"),
+                (Employment.salary < 20000, "12k-20k"),
+                else_=">20k"
+            )
+        ).all()
+        
+        # 确保所有区间都有值
+        range_order = ["<5k", "5k-8k", "8k-12k", "12k-20k", ">20k"]
+        result_map = {r.range: r.count for r in salary_ranges}
+        result = [{"range": r, "count": result_map.get(r, 0)} for r in range_order]
+        
         return {"code": 200, "data": result}
 
     @staticmethod

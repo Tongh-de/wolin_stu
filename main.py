@@ -41,6 +41,7 @@ from controllers import (
 )
 from controllers.rag_router import router as rag_router
 from services.agent_service import router as agent_router
+from services.homework_service import router as homework_router
 from utils.logger import app_logger
 
 # Lifespan 事件处理
@@ -48,8 +49,8 @@ from utils.logger import app_logger
 async def lifespan(app: FastAPI):
     # 启动时
     app_logger.info("🚀 应用服务已启动")
-    app_logger.info("📚 Swagger文档: http://127.0.0.1:8082/docs")
-    app_logger.info("🌐 前端界面: http://127.0.0.1:8082/static/index.html")
+    app_logger.info("📚 Swagger文档: http://127.0.0.1:8099/docs")
+    app_logger.info("🌐 前端界面: http://127.0.0.1:8099/static/index.html")
     yield
     # 关闭时
     app_logger.info("🛑 应用服务正在关闭...")
@@ -90,22 +91,28 @@ async def log_requests(request: Request, call_next):
         app_logger.error(
             f"❌ 异常: {method} {path} | 错误: {str(e)} | 耗时: {duration:.3f}s"
         )
+        # 隐藏内部错误详情，防止信息泄露
         return JSONResponse(
             status_code=500,
-            content={"code": 500, "message": f"服务器内部错误: {str(e)}"}
+            content={"code": 500, "message": "服务器内部错误，请联系管理员"}
         )
 
-# CORS配置
+# CORS配置 - 仅允许本地开发环境
+ALLOWED_ORIGINS = os.getenv("ALLOWED_ORIGINS", "http://127.0.0.1:8099,http://localhost:8099").split(",")
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=ALLOWED_ORIGINS,
     allow_credentials=True,
-    allow_methods=["*"],
+    allow_methods=["GET", "POST", "PUT", "DELETE"],
     allow_headers=["*"],
 )
 
 # 静态文件
 app.mount("/static", StaticFiles(directory="static", html=True), name="static")
+
+# 作业上传文件目录
+os.makedirs("uploads/homework", exist_ok=True)
+app.mount("/uploads/homework", StaticFiles(directory="uploads/homework"), name="homework_uploads")
 
 # 注册路由
 app.include_router(student_router)
@@ -118,6 +125,7 @@ app.include_router(query_router)
 app.include_router(auth_router)
 app.include_router(rag_router)
 app.include_router(agent_router)
+app.include_router(homework_router)
 
 # 创建所有表
 Base.metadata.create_all(bind=engine)

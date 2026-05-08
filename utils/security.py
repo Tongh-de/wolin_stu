@@ -131,25 +131,28 @@ class InputValidator:
     def validate_password(password: str, min_length: int = 8) -> bool:
         """
         验证密码强度
-        
+
         Args:
             password: 密码
-            min_length: 最小长度，默认8
-            
+            min_length: 最小长度，默认8位
+
         Returns:
             bool: 如果密码有效则返回True
+
+        Raises:
+            ValueError: 如果密码不符合要求
         """
         if len(password) < min_length:
             raise ValueError(f"密码长度必须至少 {min_length} 个字符")
-        
-        # 检查是否包含大小写字母和数字
-        has_upper = any(c.isupper() for c in password)
+
+        # 检查复杂度：必须包含大小写字母和数字
         has_lower = any(c.islower() for c in password)
+        has_upper = any(c.isupper() for c in password)
         has_digit = any(c.isdigit() for c in password)
-        
-        if not (has_upper and has_lower and has_digit):
+
+        if not (has_lower and has_upper and has_digit):
             raise ValueError("密码必须包含大小写字母和数字")
-        
+
         return True
     
     @staticmethod

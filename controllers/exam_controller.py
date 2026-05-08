@@ -8,6 +8,8 @@ from model.student import StuBasicInfo
 from model.class_model import Class
 from typing import Optional
 from utils.logger import get_logger
+from utils.auth_deps import get_current_user, require_admin, require_teacher_or_admin
+from model.user import User
 
 logger = get_logger("exam")
 router_exam = APIRouter(prefix="/exam", tags=["学生成绩管理"])
@@ -17,10 +19,11 @@ router_exam = APIRouter(prefix="/exam", tags=["学生成绩管理"])
 async def get_all_exam_records(
         page: int = Query(1, description="页码", ge=1),
         page_size: int = Query(10, description="每页条数", ge=1, le=100),
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(require_teacher_or_admin)  # 教师或管理员
 ):
     """获取所有成绩记录，关联学生姓名和班级名称，支持分页"""
-    logger.info(f"查询成绩记录: page={page}, page_size={page_size}")
+    logger.info(f"查询成绩记录: page={page}, page_size={page_size}, 操作者: {current_user.username}")
 
     # 构建基础查询
     base_query = db.query(
@@ -72,9 +75,10 @@ async def get_all_exam_records(
 @router_exam.post("/", response_model=ResponseBase, description="提交考试成绩")
 async def exam_submit(
         exam_data: exam_request.NewExamData,
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(require_admin)  # 仅管理员
 ):
-    logger.info(f"新增成绩: stu_id={exam_data.stu_id}, seq_no={exam_data.seq_no}, grade={exam_data.grade}")
+    logger.info(f"新增成绩: stu_id={exam_data.stu_id}, seq_no={exam_data.seq_no}, grade={exam_data.grade}, 操作者: {current_user.username}")
     _return = ExamService.exam_submit(exam_data, db)
     if _return["message"] == "success":
         logger.info(f"新增成功: {_return}")
@@ -88,9 +92,10 @@ async def exam_update(
         exam_data: exam_request.UpdateExamData,
         stu_id: int = Query(description="学生编号"),
         seq_no: int = Query(description="考核序次"),
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(require_admin)  # 仅管理员
 ):
-    logger.info(f"修改成绩: stu_id={stu_id}, seq_no={seq_no}, grade={exam_data.grade}")
+    logger.info(f"修改成绩: stu_id={stu_id}, seq_no={seq_no}, grade={exam_data.grade}, 操作者: {current_user.username}")
     _return = ExamService.exam_update(stu_id, seq_no, exam_data, db)
     if _return.endswith('updated'):
         logger.info(f"修改成功: {_return}")
@@ -103,9 +108,10 @@ async def exam_update(
 async def exam_delete(
         stu_id: int,
         seq_no: Optional[int] = None,
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(require_admin)  # 仅管理员可删除
 ):
-    logger.info(f"删除成绩: stu_id={stu_id}, seq_no={seq_no}")
+    logger.info(f"删除成绩: stu_id={stu_id}, seq_no={seq_no}, 操作者: {current_user.username}")
     _return = ExamService.exam_delete(stu_id, seq_no, db)
     if _return.endswith('deleted'):
         logger.info(f"删除成功: {_return}")
@@ -118,9 +124,15 @@ async def exam_delete(
 async def exam_get(
         stu_id: int,
         seq_no: Optional[int] = None,
-        db: Session = Depends(get_db)
+        db: Session = Depends(get_db),
+        current_user: User = Depends(get_current_user)  # 登录用户可查
 ):
-    logger.info(f"查询成绩: stu_id={stu_id}, seq_no={seq_no}")
+    logger.info(f"查询成绩: stu_id={stu_id}, seq_no={seq_no}, 操作者: {current_user.username}")
+    
+    # 学生只能查自己的成绩
+    if current_user.role == 'student' and current_user.student_id != stu_id:
+        raise HTTPException(status_code=403, detail="只能查询自己的成绩")
+    
     _return = ExamService.exam_get(stu_id, seq_no, db)
     if _return["msg"] == "success":
         logger.info(f"查询成功")

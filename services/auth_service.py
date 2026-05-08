@@ -6,9 +6,19 @@ from sqlalchemy.orm import Session
 from model.user import User
 
 # 从环境变量读取配置
-SECRET_KEY = os.getenv("SECRET_KEY", "fallback-secret-key-change-in-production")
+SECRET_KEY = os.getenv("SECRET_KEY")
 ALGORITHM = os.getenv("ALGORITHM", "HS256")
 ACCESS_TOKEN_EXPIRE_MINUTES = int(os.getenv("ACCESS_TOKEN_EXPIRE_MINUTES", "30"))
+
+# 安全检查：禁止使用弱密钥
+if not SECRET_KEY or SECRET_KEY == "fallback-secret-key-change-in-production":
+    raise ValueError(
+        "安全错误: SECRET_KEY 未设置或使用了默认密钥！"
+        "请在 .env 文件中设置强密钥: SECRET_KEY=your-strong-secret-key-at-least-32-chars"
+    )
+
+if len(SECRET_KEY) < 32:
+    raise ValueError("安全错误: SECRET_KEY 长度必须至少 32 个字符")
 
 pwd_context = CryptContext(schemes=["pbkdf2_sha256"], deprecated="auto")
 
@@ -55,7 +65,7 @@ def create_access_token(data: dict, expires_delta: timedelta = None) -> str:
         JWT token 字符串
     """
     to_encode = data.copy()
-    expire = datetime.utcnow() + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
+    expire = datetime.now().replace(tzinfo=None) + (expires_delta or timedelta(minutes=ACCESS_TOKEN_EXPIRE_MINUTES))
     to_encode.update({"exp": expire})
     encoded_jwt = jwt.encode(to_encode, SECRET_KEY, algorithm=ALGORITHM)
     return encoded_jwt

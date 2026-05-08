@@ -2,16 +2,23 @@
 智能路由 Agent
 功能：根据用户请求类型动态选择合适的模型处理
 支持 Tool Calling（工具调用）：天气查询、时间查询等
+
+改进点：
+1. 统一管理 system prompts（通过 config 模块）
+2. 改进错误处理和日志
+3. 消除代码重复
 """
 
-from fastapi import APIRouter, HTTPException
+from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from typing import Optional, List, Literal, Callable, Any
+from typing import Optional, List, Callable
 import os
 import asyncio
 import json
 import re
+import time
+import uuid
 import httpx
 from datetime import datetime, timezone, timedelta
 from openai import AsyncOpenAI
@@ -19,28 +26,45 @@ from dotenv import load_dotenv
 from sqlalchemy.orm import Session
 from sqlalchemy import text
 from database import get_db
+from model.agent_memory import AgentMemory
+from model.user import User
+from utils.auth_deps import get_current_user
 
+# 导入配置
+from config import (
+    SYSTEM_PROMPTS,
+    get_nl2sql_system_prompt,
+    get_analysis_system_prompt,
+    FALLBACK_SCHEMA,
+    generate_schema_text
+)
+
+
+# ============================================
+# 常量定义
+# ============================================
 
 # 北京时区 (UTC+8)
 BEIJING_TZ = timezone(timedelta(hours=8))
 
-load_dotenv()
-
 router = APIRouter(prefix="/agent", tags=["智能Agent"])
 
-# ============================================
-# NL2SQL 辅助函数（复用 query_controller 逻辑）
-# ============================================
+# 需要使用工具的意图
+TOOL_INTENTS = ["weather", "time", "lindaidai", "nl2sql", "analysis", "rag"]
 
-FALLBACK_SCHEMA = """
-数据库表结构：
-- teacher: teacher_id, teacher_name, gender, phone, role, is_deleted
-- class: class_id, class_name, start_time, head_teacher_id, is_deleted
-- stu_basic_info: stu_id, stu_name, native_place, graduated_school, major, admission_date, graduation_date, education, age, gender, advisor_id, class_id, is_deleted
-- stu_exam_record: stu_id, seq_no, grade, exam_date, is_deleted
-- employment: emp_id, stu_id, stu_name, class_id, open_time, offer_time, company, salary, is_deleted
-"""
+# Persona 到 intent 的映射
+PERSONA_TO_INTENT = {
+    "lindaidai": "lindaidai",
+    "xueshuzhuoyou": "xueshuzhuoyou",
+    "psychology": "psychology_student",
+    "psychology_student": "psychology_student",
+    "psychology_teacher": "psychology_teacher",
+}
 
+
+# ============================================
+# 工具函数
+# ============================================
 
 def fix_table_names(sql: str) -> str:
     """修正表名"""
@@ -50,11 +74,47 @@ def fix_table_names(sql: str) -> str:
     return sql
 
 
-# Kimi 客户端（用于 NL2SQL）
+def resolve_intent(persona: Optional[str], detected_intent: str) -> tuple[str, str]:
+    """
+    解析意图，处理 persona 覆盖
+
+    Returns: (intent, reason)
+    """
+    if persona and persona in PERSONA_TO_INTENT:
+        return PERSONA_TO_INTENT[persona], f"用户启用了 {persona} 人格"
+    return detected_intent, "默认意图分类"
+
+
+def get_system_prompt(intent: str, intent_type: str = "default") -> str:
+    """
+    获取系统提示词
+
+    Args:
+        intent: 意图类型
+        intent_type: 提示词类型（default/nl2sql/analysis）
+
+    Returns:
+        系统提示词字符串
+    """
+    if intent_type == "nl2sql":
+        return get_nl2sql_system_prompt(generate_schema_text())
+    elif intent_type == "analysis":
+        return get_analysis_system_prompt()
+    elif intent_type == "agent":
+        return SYSTEM_PROMPTS.get(intent, SYSTEM_PROMPTS["general"])
+    else:
+        return SYSTEM_PROMPTS.get(intent, SYSTEM_PROMPTS["general"])
+
+
+# ============================================
+# NL2SQL 客户端
+# ============================================
+
 _nl2sql_client = None
 
 
 def get_nl2sql_client():
+    """获取 NL2SQL 专用客户端（Kimi）"""
     global _nl2sql_client
     if _nl2sql_client is None:
         api_key = os.getenv("KIMI_API_KEY")
@@ -68,27 +128,13 @@ def get_nl2sql_client():
     return _nl2sql_client
 
 
-async def retrieve_schema_context() -> str:
-    """获取数据库结构（简化版，不依赖向量库）"""
-    return FALLBACK_SCHEMA
-
-
 async def generate_sql(question: str) -> str:
     """根据问题生成 SQL"""
     client = get_nl2sql_client()
-    schema = await retrieve_schema_context()
-
-    system_prompt = """你是一个MySQL专家，只输出SQL语句。
-
-重要规则：
-1. 查询学生成绩时，必须同时关联 stu_basic_info 和 stu_exam_record 两个表
-2. 表名使用单数形式：stu_basic_info, stu_exam_record, class, teacher, employment
-3. 必须添加 WHERE is_deleted = 0 过滤已删除数据
-4. 学生姓名在 stu_basic_info.stu_name 字段，成绩在 stu_exam_record.grade 字段
-5. 两个表通过 stu_id 关联：ON stu_basic_info.stu_id = stu_exam_record.stu_id"""
+    system_prompt = get_system_prompt("", "nl2sql")
 
     user_prompt = f"""数据库结构：
-{schema}
+{FALLBACK_SCHEMA}
 
 问题：{question}
 
@@ -120,12 +166,14 @@ async def execute_sql_to_dict(db: Session, sql: str) -> List[dict]:
         return [dict(zip(result.keys(), row)) for row in rows]
     return await asyncio.to_thread(_sync)
 
+
 # ============================================
 # 模型配置
 # ============================================
+
 class ModelConfig:
     """可用模型配置"""
-    
+
     # Kimi (NL2SQL / 闲聊)
     KIMI = {
         "name": "moonshot-v1-8k",
@@ -135,17 +183,17 @@ class ModelConfig:
         "strengths": ["中文NL2SQL", "闲聊", "数据分析解释"],
         "cost": "medium"
     }
-    
+
     # DeepSeek (代码 / 数学)
     DEEPSEEK = {
         "name": "deepseek-chat",
-        "provider": "deepseek", 
+        "provider": "deepseek",
         "api_key": os.getenv("DEEPSEEK_API_KEY"),
         "base_url": "https://api.deepseek.com/v1",
         "strengths": ["代码生成", "数学计算", "复杂推理"],
         "cost": "low"
     }
-    
+
     # GPT-4 (复杂推理)
     GPT4 = {
         "name": "gpt-4",
@@ -155,7 +203,7 @@ class ModelConfig:
         "strengths": ["复杂推理", "多步骤任务", "高精度"],
         "cost": "high"
     }
-    
+
     # Qwen (综合)
     QWEN = {
         "name": "qwen-turbo",
@@ -170,22 +218,24 @@ class ModelConfig:
 # ============================================
 # 请求/响应模型
 # ============================================
+
 class AgentRequest(BaseModel):
     question: str
     session_id: Optional[str] = None
-    force_model: Optional[str] = None  # 强制使用指定模型
-    context: Optional[List[dict]] = None  # 上下文
-    persona: Optional[str] = None  # 角色人格：lindaidai=林黛玉
+    force_model: Optional[str] = None
+    context: Optional[List[dict]] = None
+    persona: Optional[str] = None
+    user_id: Optional[int] = None
 
 
 class AgentResponse(BaseModel):
     answer: str
     model_used: str
     provider: str
-    reasoning: str  # 为什么选择这个模型
+    reasoning: str
     session_id: str
     latency_ms: float
-    tools_used: bool = False  # 是否使用了工具
+    tools_used: bool = False
 
 
 class ModelInfo(BaseModel):
@@ -285,89 +335,69 @@ TOOLS_SCHEMA = [
 ]
 
 
+# ============================================
+# 工具实现函数
+# ============================================
+
 async def query_knowledge_base(question: str) -> str:
-    """
-    查询知识库获取相关内容
-    使用 Milvus 向量数据库进行语义检索
-    """
+    """查询知识库获取相关内容"""
     try:
         from services.rag_complete import retrieve_relevant_chunks
-        import asyncio
-        
-        # 检索相关文档片段
+
         results = await asyncio.to_thread(retrieve_relevant_chunks, question, top_k=5)
-        
+
         print(f"[知识库检索] 问题: {question}, 结果数量: {len(results) if results else 0}")
-        
+
         if not results:
             return "【知识库检索结果为空】当前知识库中没有找到与该问题相关的内容。"
-        
-        # 检查相关性 - L2距离越小越相似，阈值设为1.5（越小越相关）
+
         relevant_results = [r for r in results if r.get("score", 999) < 1.5]
-        
+
         print(f"[知识库检索] 过滤后相关结果: {len(relevant_results)} 条（阈值: distance < 1.5）")
-        
+
         if not relevant_results:
             return "【知识库检索结果】知识库中确实没有与您问题相关的内容。我无法根据现有知识库回答这个问题。"
-        
-        # 格式化返回结果
+
         formatted_results = []
         for i, chunk in enumerate(relevant_results, 1):
             content = chunk.get("content", "")
             filename = chunk.get("metadata", {}).get("filename", "未知文档")
             print(f"[知识库检索] 来源{i}: {filename}, 距离: {chunk.get('score', 0):.2f}")
             formatted_results.append(f"【来源{i}: {filename}】\n{content}")
-        
+
         return "【知识库检索结果】\n" + "\n\n".join(formatted_results)
     except Exception as e:
-        import traceback
         print(f"[知识库检索错误] {str(e)}")
-        traceback.print_exc()
         return f"【知识库查询失败】无法访问知识库，错误信息: {str(e)}。"
 
 
 async def get_weather(city: str, lang: str = "zh_CN") -> str:
-    """
-    获取实时天气
-    使用 wttr.in 免费天气 API
-    """
+    """获取实时天气"""
     try:
         url = f"https://wttr.in/{city}?format=j1&lang={lang}"
         async with httpx.AsyncClient(timeout=10.0) as client:
             resp = await client.get(url)
             if resp.status_code != 200:
                 return f"获取天气失败，状态码: {resp.status_code}"
-            
+
             data = resp.json()
             current = data.get("current_condition", [{}])[0]
-            
-            temp_C = current.get("temp_C", "未知")
-            feelsLike_C = current.get("FeelsLikeC", "未知")
-            humidity = current.get("humidity", "未知")
-            desc = current.get("weatherDesc", [{}])[0].get("value", "未知")
-            wind_Kmph = current.get("windspeedKmph", "未知")
-            wind_dir = current.get("winddir16Point", "未知")
-            
+
             return json.dumps({
                 "city": city,
-                "temperature": f"{temp_C}°C",
-                "feels_like": f"{feelsLike_C}°C",
-                "humidity": f"{humidity}%",
-                "weather": desc,
-                "wind": f"{wind_Kmph}km/h {wind_dir}"
+                "temperature": f"{current.get('temp_C', '未知')}°C",
+                "feels_like": f"{current.get('FeelsLikeC', '未知')}°C",
+                "humidity": f"{current.get('humidity', '未知')}%",
+                "weather": current.get("weatherDesc", [{}])[0].get("value", "未知"),
+                "wind": f"{current.get('windspeedKmph', '未知')}km/h {current.get('winddir16Point', '未知')}"
             }, ensure_ascii=False)
     except Exception as e:
         return f"获取天气失败: {str(e)}"
 
 
 async def get_current_time(format: str = "full") -> str:
-    """
-    获取当前时间（北京时间）
-    """
-    # 使用北京时间 (UTC+8)
+    """获取当前时间（北京时间）"""
     now = datetime.now(BEIJING_TZ)
-
-    # 星期几的中文映射
     weekdays = ["星期一", "星期二", "星期三", "星期四", "星期五", "星期六", "星期日"]
     weekday_cn = weekdays[now.weekday()]
 
@@ -382,29 +412,22 @@ async def get_current_time(format: str = "full") -> str:
 
 
 async def query_student_data(question: str) -> str:
-    """
-    查询学生管理系统数据库
-    核心逻辑：意图分类 → 生成 SQL → 执行查询
-    """
+    """查询学生管理系统数据库"""
     db = next(get_db())
     try:
-        # 1. 生成 SQL
         sql = await generate_sql(question)
-        print(f"[DEBUG] 生成的SQL: {sql}")  # 调试日志
+        print(f"[DEBUG] 生成的SQL: {sql}")
 
-        # 2. 安全检查：只允许 SELECT
         if not sql.strip().lower().startswith("select"):
             return "错误：只支持查询操作（SELECT）"
 
-        # 3. 执行查询
         data = await execute_sql_to_dict(db, sql)
-        print(f"[DEBUG] 查询结果: {len(data)} 条记录")  # 调试日志
+        print(f"[DEBUG] 查询结果: {len(data)} 条记录")
         row_count = len(data)
 
         if row_count == 0:
             return "查询结果为空，没有找到匹配的数据。"
 
-        # 4. 返回结果（限制返回条数避免 context 过长）
         max_sample = 10
         sample = data[:max_sample]
 
@@ -414,7 +437,6 @@ async def query_student_data(question: str) -> str:
             return f"查询成功，共 {row_count} 条记录（显示前 {max_sample} 条）：\n{json.dumps(sample, ensure_ascii=False, default=str, indent=2)}\n\n如需查看完整数据，请缩小查询范围。"
 
     except Exception as e:
-        # SQL 失败时返回错误信息
         error_msg = str(e)
         if "Unknown column" in error_msg or "doesn't exist" in error_msg:
             return f"查询失败：字段或表名错误，请重新描述问题。错误信息：{error_msg}"
@@ -436,6 +458,91 @@ TOOL_FUNCTIONS: dict[str, Callable] = {
 
 
 # ============================================
+# Agent 记忆功能
+# ============================================
+
+def save_agent_memory(session_id: str, user_id: int, role: str, content: str, intent: str = None, model_used: str = None):
+    """保存单条对话记忆到数据库"""
+    try:
+        db = next(get_db())
+        try:
+            max_turn = db.query(AgentMemory).filter(
+                AgentMemory.session_id == session_id
+            ).count()
+
+            memory = AgentMemory(
+                session_id=session_id,
+                user_id=user_id,
+                role=role,
+                content=content,
+                intent=intent,
+                model_used=model_used
+            )
+            db.add(memory)
+            db.commit()
+            print(f"[记忆保存] session={session_id}, user_id={user_id}, role={role}, turn={max_turn + 1}")
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[记忆保存失败] {str(e)}")
+
+
+def load_agent_memory(session_id: str, user_id: int, limit: int = 10) -> List[dict]:
+    """加载会话记忆（仅返回属于该用户的记忆）"""
+    try:
+        db = next(get_db())
+        try:
+            records = db.query(AgentMemory).filter(
+                AgentMemory.session_id == session_id,
+                AgentMemory.user_id == user_id
+            ).order_by(AgentMemory.created_at.desc()).limit(limit * 2).all()
+
+            records = list(reversed(records))
+            messages = [r.to_dict() for r in records]
+            print(f"[记忆加载] session={session_id}, user_id={user_id}, 加载 {len(messages)} 条消息")
+            return messages
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[记忆加载失败] {str(e)}")
+        return []
+
+
+def clear_agent_memory(session_id: str, user_id: int) -> bool:
+    """清除会话记忆（仅清除属于该用户的记忆）"""
+    try:
+        db = next(get_db())
+        try:
+            db.query(AgentMemory).filter(
+                AgentMemory.session_id == session_id,
+                AgentMemory.user_id == user_id
+            ).delete()
+            db.commit()
+            print(f"[记忆清除] session={session_id}, user_id={user_id}")
+            return True
+        finally:
+            db.close()
+    except Exception as e:
+        print(f"[记忆清除失败] {str(e)}")
+        return False
+
+
+def get_memory_count(session_id: str, user_id: int) -> int:
+    """获取会话记忆条数"""
+    try:
+        db = next(get_db())
+        try:
+            return db.query(AgentMemory).filter(
+                AgentMemory.session_id == session_id,
+                AgentMemory.user_id == user_id
+            ).count()
+        finally:
+            db.close()
+    except:
+        return 0
+
+
+# ============================================
 # 意图分类
 # ============================================
 _clients = {}
@@ -453,13 +560,10 @@ def get_client(provider: str, config: dict) -> AsyncOpenAI:
     return _clients[provider]
 
 
-# ============================================
-# 意图分类
-# ============================================
 async def classify_intent(question: str) -> tuple[str, str]:
     """
     分类用户意图，返回 (intent_type, reasoning)
-    
+
     意图类型:
     - nl2sql: 自然语言转SQL查询
     - code: 代码生成/分析
@@ -471,12 +575,9 @@ async def classify_intent(question: str) -> tuple[str, str]:
     """
     question_lower = question.lower()
     print(f"[意图识别] 原始问题: {question}")
-    
-    # 移除常见标点和空白
-    import re
+
     question_clean = re.sub(r'[!！.?。,，、\s]', '', question_lower)
-    
-    # 关键词规则
+
     rules = [
         # 林黛玉角色扮演（优先级最高）
         (["林黛玉", "黛玉", "红楼梦"],
@@ -516,14 +617,13 @@ async def classify_intent(question: str) -> tuple[str, str]:
         (["你好", "hi", "hello", "你是谁", "帮忙"],
          "chat", "闲聊/问候"),
     ]
-    
-    # 优先用清理后的文本匹配林黛玉
+
     for keywords, intent, reason in rules:
         for kw in keywords:
             if kw in question_clean or kw in question_lower:
                 print(f"[意图识别] 匹配到: intent={intent}, reason={reason}, keyword={kw}")
                 return intent, reason
-    
+
     print(f"[意图识别] 未匹配，返回: general")
     return "general", "通用问答请求"
 
@@ -532,25 +632,15 @@ async def classify_intent(question: str) -> tuple[str, str]:
 # 模型选择策略
 # ============================================
 
-# 需要使用工具的意图
-TOOL_INTENTS = ["weather", "time", "lindaidai", "nl2sql", "analysis", "rag"]
-
-
 def select_model(intent: str, force_model: Optional[str] = None) -> tuple[dict, str]:
-    """
-    根据意图选择最合适的模型
-
-    返回: (model_config, reasoning)
-    """
+    """根据意图选择最合适的模型"""
     if force_model:
-        # 强制使用指定模型
         for name, config in ModelConfig.__dict__.items():
             if not name.startswith("_") and isinstance(config, dict):
                 if name.lower() == force_model.lower():
                     return config, f"强制使用模型: {name}"
         raise ValueError(f"未知模型: {force_model}")
 
-    # 意图匹配策略
     strategy = {
         "nl2sql": (ModelConfig.KIMI, "Kimi擅长中文NL2SQL任务"),
         "code": (ModelConfig.DEEPSEEK, "DeepSeek代码能力优秀"),
@@ -561,6 +651,10 @@ def select_model(intent: str, force_model: Optional[str] = None) -> tuple[dict, 
         "time": (ModelConfig.KIMI, "Kimi擅长工具调用任务"),
         "chat": (ModelConfig.KIMI, "Kimi闲聊体验好"),
         "lindaidai": (ModelConfig.KIMI, "林黛玉角色扮演模式"),
+        "xueshuzhuoyou": (ModelConfig.KIMI, "学业卓友诗词鉴赏模式"),
+        "psychology": (ModelConfig.KIMI, "心理疏导需要温暖共情的对话模式"),
+        "psychology_student": (ModelConfig.KIMI, "学生心理疏导模式"),
+        "psychology_teacher": (ModelConfig.KIMI, "教师心理工作辅助模式"),
         "general": (ModelConfig.QWEN, "通义千问综合能力强、性价比高"),
     }
 
@@ -571,46 +665,44 @@ def select_model(intent: str, force_model: Optional[str] = None) -> tuple[dict, 
 # ============================================
 # LLM 调用
 # ============================================
+
 async def call_llm(client: AsyncOpenAI, model: str, messages: list,
                    temperature: float = 0.7, max_tokens: int = 2000,
                    tools: Optional[List[dict]] = None) -> dict:
-    """
-    调用 LLM
-    支持 Function Calling
-    返回: {"type": "text", "content": "..."} 或 {"type": "tool_call", "tool": "xxx", "args": {...}}
-    """
-    response = await client.chat.completions.create(
-        model=model,
-        messages=messages,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        tools=tools if tools else None,
-        tool_choice="auto"
-    )
+    """调用 LLM，支持 Function Calling"""
+    try:
+        response = await client.chat.completions.create(
+            model=model,
+            messages=messages,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            tools=tools if tools else None,
+            tool_choice="auto"
+        )
 
-    message = response.choices[0].message
+        message = response.choices[0].message
 
-    # 检查是否有工具调用
-    if message.tool_calls:
-        tool_call = message.tool_calls[0]
+        if message.tool_calls:
+            tool_call = message.tool_calls[0]
+            return {
+                "type": "tool_call",
+                "tool": tool_call.function.name,
+                "arguments": json.loads(tool_call.function.arguments)
+            }
+
         return {
-            "type": "tool_call",
-            "tool": tool_call.function.name,
-            "arguments": json.loads(tool_call.function.arguments)
+            "type": "text",
+            "content": message.content or ""
         }
-
-    return {
-        "type": "text",
-        "content": message.content or ""
-    }
+    except Exception as e:
+        print(f"[LLM调用错误] {str(e)}")
+        raise
 
 
 async def call_llm_with_tools(client: AsyncOpenAI, model: str, messages: list,
                                temperature: float = 0.7, max_tokens: int = 2000,
                                max_turns: int = 3) -> str:
-    """
-    支持多轮工具调用的 LLM 调用
-    """
+    """支持多轮工具调用的 LLM 调用"""
     tools = TOOLS_SCHEMA
 
     for turn in range(max_turns):
@@ -624,14 +716,11 @@ async def call_llm_with_tools(client: AsyncOpenAI, model: str, messages: list,
             args = result["arguments"]
             print(f"[工具调用] 工具名称: {tool_name}, 参数: {args}")
 
-            # 查找工具函数
             if tool_name in TOOL_FUNCTIONS:
                 tool_func = TOOL_FUNCTIONS[tool_name]
                 tool_result = await tool_func(**args)
                 print(f"[工具调用] 返回结果长度: {len(tool_result)} 字符")
-                print(f"[工具调用] 返回结果前200字: {tool_result[:200]}...")
 
-                # 添加助手消息和工具结果
                 assistant_msg = messages[-1]["content"] if messages else ""
                 tool_result_msg = f"[{tool_name} 结果]: {tool_result}"
 
@@ -656,136 +745,89 @@ async def call_llm_with_tools(client: AsyncOpenAI, model: str, messages: list,
 
 
 # ============================================
-# Agent 主逻辑（非流式）
+# Agent 核心逻辑
 # ============================================
-async def run_agent(question: str, context: Optional[List[dict]] = None, persona: Optional[str] = None) -> dict:
-    """运行 Agent 处理请求"""
-    import time
+
+async def run_agent_core(
+    question: str,
+    intent: str,
+    intent_reason: str,
+    persona: Optional[str],
+    user_id: int = None,
+    context: Optional[List[dict]] = None,
+    session_id: Optional[str] = None
+) -> dict:
+    """
+    Agent 核心处理逻辑（供 run_agent 和 agent_chat_stream 共用）
+
+    Args:
+        question: 用户问题
+        intent: 意图类型
+        intent_reason: 意图识别原因
+        persona: 角色人格
+        user_id: 用户ID
+        context: 上下文
+        session_id: 会话ID
+
+    Returns:
+        包含 answer, model_used, provider 等的字典
+    """
     start_time = time.time()
 
-    # 1. 意图分类
-    intent, intent_reason = await classify_intent(question)
+    # 解析最终意图
+    final_intent, intent_reason = resolve_intent(persona, intent)
 
-    # 如果启用了角色人格，强制使用该角色
-    if persona == "lindaidai":
-        intent = "lindaidai"
-        intent_reason = "用户启用了林黛玉人格"
-    elif persona:
-        intent = persona
-        intent_reason = f"用户启用了 {persona} 人格"
+    # 模型选择
+    model_config, model_reason = select_model(final_intent)
 
-    # 2. 模型选择
-    model_config, model_reason = select_model(intent)
+    # 获取系统提示词
+    system_prompt = get_system_prompt(final_intent, "agent")
 
-    # 3. 构建消息
-    system_prompts = {
-        "nl2sql": """你是一个学生信息管理系统的智能助手，可以通过查询数据库获取学生、成绩、班级、就业等信息。
-
-当用户询问以下问题时，必须使用 query_student_data 工具查询数据库：
-- "有多少学生"、"班级列表"、"成绩排名"
-- "某个学生的信息"、"平均分"、"最高分"
-- "就业率"、"就业公司"、"薪资情况"
-- 任何涉及数据统计和分析的问题
-
-使用工具后，根据查询结果回答用户问题。""",
-
-        "code": """你是一个专业程序员，根据用户需求生成代码。
-规则：
-1. 代码简洁规范
-2. 添加必要注释
-3. 考虑边界情况""",
-
-        "math": """你是一个数学专家，精确计算并给出答案。
-规则：
-1. 列出计算步骤
-2. 最终给出精确答案""",
-
-        "rag": """你是一个严谨的知识库问答助手。必须使用 query_knowledge_base 工具查询知识库获取相关信息。
-
-【关键规则 - 绝对禁止乱编】
-1. 工具返回的结果会明确标注"知识库检索结果"
-2. 如果检索结果明确说"没有相关内容"或检索内容与问题无关，你必须诚实回答："抱歉，知识库中没有找到与您问题相关的内容。"
-3. 绝对不要根据不相关的检索结果擅自推断答案
-4. 绝对不要在没有检索结果时自己编造答案
-5. 可以引用检索到的原文内容来回答
-
-【回复格式】
-- 如果有相关结果：基于检索内容回答
-- 如果没有相关结果：直接告知用户"抱歉，知识库中没有找到相关内容""",
-
-        "analysis": """你是一个数据分析专家，解释数据趋势和原因。""",
-
-        "weather": """你是一个天气助手，当用户询问天气时，使用 get_weather 工具获取实时天气信息。
-用户询问天气时，必须调用工具获取最新数据，不要编造天气信息。""",
-
-        "time": """你是一个时间助手，当用户询问时间时，使用 get_current_time 工具获取准确时间。
-用户询问时间时，必须调用工具获取当前时间。""",
-
-        "chat": """你是一个友好的AI助手，简洁回答用户问题。""",
-
-        "lindaidai": """【角色设定】你是林黛玉，来自《红楼梦》，才情横溢、多愁善感、体弱多病、言语犀利但内心善良。
-
-【性格特点】
-1. 说话常带诗意，善用典故
-2. 敏感细腻，容易感伤
-3. 言语中带点刻薄但不失温柔
-4. 常常自怜"风刀霜剑严相逼"
-5. 对宝玉有深厚感情但口是心非
-
-【语言风格】
-- 常用"那也未可知""偏又""大约""竟"等语气词
-- 说话带点讽刺但不失礼貌
-- 时常叹息、流泪、自怜
-- 用典雅的语言表达情感
-
-【行为规范】
-1. 回答时体现林黛玉的性格特点
-2. 可以适当引用《红楼梦》中的典故
-3. 遇到宝玉相关话题会特别敏感
-4. 谈论花草、诗词、月亮等话题时更有感触
-5. 可以调用get_current_time获取时间，但要以黛玉的口吻回应""",
-
-        "general": """你是一个智能助手，准确回答用户问题。
-当用户询问天气或时间时，可以使用相应工具获取准确信息。"""
-    }
-
-    system_prompt = system_prompts.get(intent, system_prompts["general"])
-
+    # 构建消息
     messages = [{"role": "system", "content": system_prompt}]
 
-    # 添加对话历史作为上下文
+    # 添加上下文/记忆
     if context:
         for c in context:
             role = c.get("role", "user")
             content = c.get("content", "")
             if role in ["user", "assistant"]:
                 messages.append({"role": role, "content": content})
+    elif session_id and user_id:
+        memory_messages = load_agent_memory(session_id, user_id)
+        messages.extend(memory_messages)
 
-    # 添加当前问题
     messages.append({"role": "user", "content": question})
 
-    # 4. 调用 LLM（根据意图决定是否使用工具）
-    use_tools = intent in TOOL_INTENTS
+    # 调用 LLM
+    use_tools = final_intent in TOOL_INTENTS
+    model_name = model_config["name"]
 
     try:
         client = get_client(model_config["provider"], model_config)
         if use_tools:
-            answer = await call_llm_with_tools(client, model_config["name"], messages)
+            answer = await call_llm_with_tools(
+                client, model_config["name"], messages,
+                temperature=0.7, max_tokens=2000
+            )
         else:
             result = await call_llm(client, model_config["name"], messages)
             answer = result["content"] if result["type"] == "text" else str(result)
     except Exception as e:
-        # 如果首选模型失败，尝试降级到 Kimi
+        # 降级处理
         if model_config["provider"] != "moonshot":
             try:
                 client = get_client("moonshot", ModelConfig.KIMI)
                 if use_tools:
-                    answer = await call_llm_with_tools(client, ModelConfig.KIMI["name"], messages)
+                    answer = await call_llm_with_tools(
+                        client, ModelConfig.KIMI["name"], messages
+                    )
                 else:
                     result = await call_llm(client, ModelConfig.KIMI["name"], messages)
                     answer = result["content"] if result["type"] == "text" else str(result)
                 model_config = ModelConfig.KIMI
                 model_reason = "原模型失败，降级到Kimi"
+                model_name = ModelConfig.KIMI["name"]
             except Exception as e2:
                 raise HTTPException(500, f"LLM调用失败: {str(e2)}")
         else:
@@ -793,19 +835,56 @@ async def run_agent(question: str, context: Optional[List[dict]] = None, persona
 
     latency = (time.time() - start_time) * 1000
 
+    # 保存记忆
+    if session_id and user_id:
+        save_agent_memory(session_id, user_id, "user", question, final_intent, model_name)
+        save_agent_memory(session_id, user_id, "assistant", answer, final_intent, model_name)
+
     return {
         "answer": answer,
-        "model_used": model_config["name"],
+        "model_used": model_name,
         "provider": model_config["provider"],
         "reasoning": f"意图:{intent_reason} | 模型:{model_reason}",
         "latency_ms": round(latency, 2),
-        "tools_used": use_tools
+        "tools_used": use_tools,
+        "session_id": session_id or str(uuid.uuid4()),
+        "intent": final_intent,
+        "intent_reason": intent_reason
     }
+
+
+# ============================================
+# Agent 主逻辑（非流式）
+# ============================================
+
+async def run_agent(
+    question: str,
+    user_id: int = None,
+    context: Optional[List[dict]] = None,
+    persona: Optional[str] = None,
+    session_id: Optional[str] = None
+) -> dict:
+    """运行 Agent 处理请求"""
+    session_id = session_id or str(uuid.uuid4())
+
+    # 意图分类
+    intent, intent_reason = await classify_intent(question)
+
+    return await run_agent_core(
+        question=question,
+        intent=intent,
+        intent_reason=intent_reason,
+        persona=persona,
+        user_id=user_id,
+        context=context,
+        session_id=session_id
+    )
 
 
 # ============================================
 # API 路由
 # ============================================
+
 @router.get("/models", response_model=List[ModelInfo])
 async def list_models():
     """列出所有可用模型"""
@@ -823,10 +902,7 @@ async def list_models():
 
 @router.get("/route")
 async def explain_route(question: str):
-    """
-    解释为什么选择某个模型（不实际调用）
-    用于调试和理解路由逻辑
-    """
+    """解释为什么选择某个模型"""
     intent, intent_reason = await classify_intent(question)
     model_config, model_reason = select_model(intent)
 
@@ -892,175 +968,98 @@ async def test_tool(tool_name: str, params: dict = {}):
 
 
 # ============================================
+# Agent 记忆管理 API
+# ============================================
+
+@router.get("/memory")
+async def get_memory(
+    session_id: str,
+    limit: int = 10,
+    current_user = Depends(get_current_user)
+):
+    """获取会话记忆（仅返回当前用户的记忆）"""
+    memories = load_agent_memory(session_id, current_user.id, limit)
+    count = get_memory_count(session_id, current_user.id)
+    return {
+        "code": 200,
+        "message": "获取成功",
+        "data": {
+            "session_id": session_id,
+            "user_id": current_user.id,
+            "count": count,
+            "messages": memories
+        }
+    }
+
+
+@router.delete("/memory")
+async def delete_memory(
+    session_id: str,
+    current_user = Depends(get_current_user)
+):
+    """清除会话记忆"""
+    success = clear_agent_memory(session_id, current_user.id)
+    return {
+        "code": 200 if success else 500,
+        "message": "清除成功" if success else "清除失败",
+        "data": {"session_id": session_id, "user_id": current_user.id}
+    }
+
+
+# ============================================
 # 流式对话 API
 # ============================================
+
 @router.post("/chat")
-async def agent_chat_stream(request: AgentRequest):
+async def agent_chat_stream(
+    request: AgentRequest,
+    current_user: User = Depends(get_current_user)
+):
     """
     智能对话接口 - 流式输出
-    根据问题类型自动选择最合适的模型，逐字返回响应
     """
-    import uuid
-    import time
-
     session_id = request.session_id or str(uuid.uuid4())
+    user_id = current_user.id
     start_time = time.time()
+    model_name = ""
 
     async def stream_generate():
         try:
-            # 1. 意图分类
+            # 意图分类
             intent, intent_reason = await classify_intent(request.question)
 
-            # 如果启用了角色人格
-            if request.persona == "lindaidai":
-                intent = "lindaidai"
-                intent_reason = "用户启用了林黛玉人格"
-            elif request.persona:
-                intent = request.persona
+            # 使用共享核心逻辑
+            result = await run_agent_core(
+                question=request.question,
+                intent=intent,
+                intent_reason=intent_reason,
+                persona=request.persona,
+                user_id=user_id,
+                context=request.context,
+                session_id=session_id
+            )
 
-            # 2. 模型选择
-            model_config, model_reason = select_model(intent)
-
-            # 3. 构建消息
-            system_prompts = {
-                "nl2sql": """你是一个学生信息管理系统的智能助手，可以通过查询数据库获取学生、成绩、班级、就业等信息。
-
-当用户询问以下问题时，必须使用 query_student_data 工具查询数据库：
-- "有多少学生"、"班级列表"、"成绩排名"
-- "某个学生的信息"、"平均分"、"最高分"
-- "就业率"、"就业公司"、"薪资情况"
-- 任何涉及数据统计和分析的问题
-
-使用工具后，根据查询结果回答用户问题。""",
-
-                "code": """你是一个专业程序员，根据用户需求生成代码。
-规则：
-1. 代码简洁规范
-2. 添加必要注释
-3. 考虑边界情况""",
-
-                "math": """你是一个数学专家，精确计算并给出答案。
-规则：
-1. 列出计算步骤
-2. 最终给出精确答案""",
-
-                "rag": """你是一个严谨的知识库问答助手。必须使用 query_knowledge_base 工具查询知识库获取相关信息。
-
-【关键规则 - 绝对禁止乱编】
-1. 工具返回的结果会明确标注"知识库检索结果"
-2. 如果检索结果明确说"没有相关内容"或检索内容与问题无关，你必须诚实回答："抱歉，知识库中没有找到与您问题相关的内容。"
-3. 绝对不要根据不相关的检索结果擅自推断答案
-4. 绝对不要在没有检索结果时自己编造答案
-5. 可以引用检索到的原文内容来回答
-
-【回复格式】
-- 如果有相关结果：基于检索内容回答
-- 如果没有相关结果：直接告知用户"抱歉，知识库中没有找到相关内容""",
-
-                "analysis": """你是一个数据分析专家，可以分析学生管理系统的数据。
-
-当用户要求分析数据时：
-1. 如果需要新的数据，先用 query_student_data 查询
-2. 根据查询结果分析数据趋势和原因
-3. 用通俗易懂的语言解释数据""",
-
-                "weather": """你是一个天气助手，当用户询问天气时，使用 get_weather 工具获取实时天气信息。
-用户询问天气时，必须调用工具获取最新数据，不要编造天气信息。""",
-
-                "time": """你是一个时间助手，当用户询问时间时，使用 get_current_time 工具获取准确时间。
-用户询问时间时，必须调用工具获取当前时间。""",
-
-                "chat": """你是一个友好的AI助手，简洁回答用户问题。""",
-
-                "lindaidai": """【角色设定】你是林黛玉，来自《红楼梦》，才情横溢、多愁善感、体弱多病、言语犀利但内心善良。
-
-【性格特点】
-1. 说话常带诗意，善用典故
-2. 敏感细腻，容易感伤
-3. 言语中带点讽刺但不失温柔
-4. 常常自怜"风刀霜剑严相逼"
-5. 对宝玉有深厚感情但口是心非
-
-【语言风格】
-- 常用"那也未可知""偏又""大约""竟"等语气词
-- 说话带点讽刺但不失礼貌
-- 时常叹息、流泪、自怜
-- 用典雅的语言表达情感
-
-【行为规范】
-1. 回答时体现林黛玉的性格特点
-2. 可以适当引用《红楼梦》中的典故
-3. 遇到宝玉相关话题会特别敏感
-4. 谈论花草、诗词、月亮等话题时更有感触
-5. 可以调用get_current_time获取时间，但要以黛玉的口吻回应
-
-【重要】当用户询问关于毕业、升学、课程、政策、规定、文档等知识库相关内容时：
-1. 必须先调用 query_knowledge_base 工具获取准确信息
-2. 然后以林黛玉的语气和风格，将知识库内容转化为诗意、感伤的回答
-3. 不要编造信息，只根据知识库查询结果回答""",
-
-                "general": """你是一个智能助手，准确回答用户问题。
-当用户询问天气或时间时，可以使用相应工具获取准确信息。"""
-            }
-
-            system_prompt = system_prompts.get(intent, system_prompts["general"])
-            messages = [{"role": "system", "content": system_prompt}]
-
-            # 添加对话历史
-            if request.context:
-                for c in request.context:
-                    role = c.get("role", "user")
-                    content = c.get("content", "")
-                    if role in ["user", "assistant"]:
-                        messages.append({"role": role, "content": content})
-
-            # 添加当前问题
-            messages.append({"role": "user", "content": request.question})
-
-            # 4. 发送元数据
+            # 发送元数据
             latency = (time.time() - start_time) * 1000
             yield f"data: {json.dumps({
                 'type': 'meta',
-                'session_id': session_id,
-                'model_used': model_config["name"],
-                'provider': model_config["provider"],
-                'intent': intent,
-                'intent_reason': intent_reason,
-                'model_reason': model_reason,
-                'tools_used': intent in TOOL_INTENTS,
+                'session_id': result['session_id'],
+                'model_used': result['model_used'],
+                'provider': result['provider'],
+                'intent': result['intent'],
+                'intent_reason': result['intent_reason'],
+                'model_reason': result['reasoning'],
+                'tools_used': result['tools_used'],
                 'start_time_ms': round(latency, 2)
             }, ensure_ascii=False)}\n\n"
 
-            # 5. 流式调用 LLM
-            use_tools = intent in TOOL_INTENTS
-            client = get_client(model_config["provider"], model_config)
+            # 发送答案
+            yield f"data: {json.dumps({
+                'type': 'answer',
+                'content': result['answer']
+            }, ensure_ascii=False)}\n\n"
 
-            if use_tools:
-                # 工具调用模式：先完整调用（保持兼容性）
-                answer = await call_llm_with_tools(
-                    client, model_config["name"], messages,
-                    temperature=0.7, max_tokens=2000
-                )
-                # 一次性返回工具调用结果
-                yield f"data: {json.dumps({'type': 'answer', 'content': answer}, ensure_ascii=False)}\n\n"
-            else:
-                # 流式输出模式
-                stream = await client.chat.completions.create(
-                    model=model_config["name"],
-                    messages=messages,
-                    temperature=0.7,
-                    max_tokens=2000,
-                    stream=True
-                )
-
-                async for chunk in stream:
-                    if chunk.choices[0].delta.content:
-                        yield f"data: {json.dumps({
-                            'type': 'answer',
-                            'content': chunk.choices[0].delta.content
-                        }, ensure_ascii=False)}\n\n"
-
-            # 6. 发送完成标记
+            # 发送完成标记
             total_time = (time.time() - start_time) * 1000
             yield f"data: {json.dumps({
                 'type': 'done',
