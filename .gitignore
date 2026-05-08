@@ -4,36 +4,50 @@ __pycache__/
 *$py.class
 *.so
 .Python
+env/
 venv/
 ENV/
-env/
 .venv/
 
-# IDE
-.idea/
-.vscode/
-*.swp
-*.swo
-
-# Environment
+# 环境配置
 .env
 .env.local
+.env.*.local
 
-# Database
-*.sqlite3
-*.db
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
 
-# Chroma vector DB
-chroma_db/
-
-# Logs
+# 日志
 *.log
 logs/
+
+# 数据库
+*.db
+*.sqlite
+*.sqlite3
+
+# 上传文件
+uploads/
+chroma_db/
+
+# 测试
+.pytest_cache/
+htmlcov/
+.coverage
+
+# 构建
+dist/
+build/
+*.egg-info/
 
 # OS
 .DS_Store
 Thumbs.db
 
-# Test
-test_*.py
-*.pyc
+# 临时文件
+*.tmp
+*.bak

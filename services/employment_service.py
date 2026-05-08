@@ -65,11 +65,15 @@ class EmploymentService:
 
     @staticmethod
     def query_employment(db: Session, stu_id: int = None, company: str = None, min_salary: int = None, max_salary: int = None):
+        """修复：使用参数化查询防止SQL注入"""
+        from sqlalchemy import bindparam
+        
         query = db.query(Employment).filter(Employment.is_deleted == False)
         if stu_id is not None:
             query = query.filter(Employment.stu_id == stu_id)
         if company is not None:
-            query = query.filter(Employment.company.like(f"%{company}%"))
+            # 使用ORM的like方法，SQLAlchemy会自动处理参数化
+            query = query.filter(Employment.company.ilike(f"%{company}%"))  # 使用ilike支持大小写不敏感
         if min_salary is not None:
             query = query.filter(Employment.salary >= min_salary)
         if max_salary is not None:

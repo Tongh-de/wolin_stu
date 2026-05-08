@@ -51,22 +51,38 @@ wolin-student/
 ├── services/              # 业务逻辑层
 │   ├── agent_service.py          # 智能 Agent 服务（多模型路由）
 │   ├── rag_complete.py           # RAG 问答服务（文档处理/向量检索）
-│   ├── conversation_service.py   # 对话历史管理
 │   └── ...
+├── config/                 # 配置模块
+│   ├── agent_prompts.py         # Agent 系统提示词配置
+│   ├── db_schema.py            # 数据库表结构配置
+│   └── app_config.py           # 应用统一配置
 ├── model/                 # 数据库模型
-│   ├── user.py                  # 用户模型
-│   └── conversation.py          # 对话记忆模型
 ├── schemas/               # Pydantic 数据模型
 ├── utils/                 # 工具模块
 │   ├── logger.py               # 日志配置
-│   └── security.py             # 安全工具（SQL验证/输入校验/脱敏）
-├── static/
-│   └── index.html         # 前端页面
-├── chroma_db/             # Chroma 向量数据库
-├── docs/                  # 项目文档
-├── database.py            # 数据库配置
-├── main.py                # 应用入口
-└── requirements.txt      # 依赖列表
+│   ├── security.py             # 安全工具（SQL验证/输入校验/脱敏）
+│   ├── responses.py            # 统一响应格式
+│   └── db_helpers.py           # 数据库会话管理
+├── tests/                  # 单元测试
+│   ├── test_agent.py           # Agent 核心功能测试
+│   ├── test_statistics.py      # 统计服务测试
+│   └── test_utils.py           # 工具函数测试
+├── static/                 # 前端资源
+│   ├── index.html              # 主入口（精简）
+│   ├── styles.css              # 全局样式
+│   ├── lin.jpg                 # 背景图片
+│   └── js/                     # 模块化JS
+│       ├── api-config.js       # API配置
+│       ├── utils.js            # 工具函数
+│       ├── ai-service.js       # AI服务
+│       ├── data-service.js     # 数据服务
+│       └── chart-service.js    # 图表服务
+├── docs/                   # 项目文档
+├── database.py              # 数据库配置
+├── main.py                  # 应用入口
+├── .env                     # 环境变量（勿提交）
+├── .gitignore              # Git忽略配置
+└── requirements.txt        # 依赖列表
 ```
 
 ## 快速开始
