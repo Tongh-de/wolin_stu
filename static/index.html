@@ -2367,7 +2367,7 @@
                                     <div class="flex gap-2 mt-3">
                                         <button type="button" @click="generateEmail" :disabled="emailGenerating" class="btn btn-primary">
                                             <i :class="emailGenerating ? 'fas fa-spinner fa-spin' : 'fas fa-magic'"></i>
-                                            {{ emailGenerating ? '生成中...' : '生成邮件' }}
+                                            {{ emailGenerating ? '生成中...' : (emailPreview.subject ? '已生成' : '生成邮件') }}
                                         </button>
                                         <button type="button" @click="resetEmailForm" class="btn btn-outline">
                                             <i class="fas fa-redo"></i>重置
@@ -2398,7 +2398,6 @@
                                                 v-model="emailPreview.subject" 
                                                 class="preview-input"
                                                 placeholder="生成的邮件主题将显示在这里，可手动修改..."
-                                                :disabled="!emailPreview.subject"
                                             />
                                         </div>
                                         <div class="preview-field">
@@ -2409,7 +2408,6 @@
                                                 v-model="emailPreview.htmlContent" 
                                                 class="preview-textarea"
                                                 placeholder="生成的邮件内容将显示在这里，可手动修改..."
-                                                :disabled="!emailPreview.htmlContent"
                                                 rows="12"
                                             ></textarea>
                                         </div>
@@ -2963,7 +2961,7 @@
 // ============================================
 // 沃林学生管理系统 - Vue 3 应用
 // ============================================
-const { createApp, ref, onMounted, watch, nextTick, computed } = Vue;
+const { createApp, ref, reactive, onMounted, watch, nextTick, computed } = Vue;
 const { ElMessage } = ElementPlus;
 
 // Axios 拦截器 - 添加调试日志
@@ -3131,7 +3129,8 @@ const app = createApp({
             recipients: ''
         });
 
-        const emailPreview = ref({
+        // 使用 reactive() 确保嵌套属性编辑后 v-model 可靠同步
+        const emailPreview = reactive({
             subject: '',
             htmlContent: '',
             textContent: ''
@@ -3177,11 +3176,9 @@ const app = createApp({
                     tone: emailForm.value.tone
                 });
                 if (response.data.code === 200) {
-                    emailPreview.value = {
-                        subject: response.data.data.subject,
-                        htmlContent: response.data.data.html_content,
-                        textContent: response.data.data.text_content
-                    };
+                    emailPreview.subject = response.data.data.subject;
+                    emailPreview.htmlContent = response.data.data.html_content;
+                    emailPreview.textContent = response.data.data.text_content;
                     ElMessage.success('邮件内容生成成功');
                 }
             } catch (error) {
@@ -3198,18 +3195,19 @@ const app = createApp({
                 ElMessage.warning('请输入收件人邮箱');
                 return;
             }
-            if (!emailPreview.value.subject || !emailPreview.value.htmlContent) {
+            if (!emailPreview.subject || !emailPreview.htmlContent) {
                 ElMessage.warning('请先生成邮件内容');
                 return;
             }
             emailSending.value = true;
             try {
+                // 直接使用 v-model 绑定的值（已经包含用户编辑后的内容）
                 const recipients = emailForm.value.recipients.split(',').map(e => e.trim()).filter(e => e);
                 const response = await axios.post(window.API_CONFIG.EMAIL.SEND, {
                     to_emails: recipients,
-                    subject: emailPreview.value.subject,
-                    html_content: emailPreview.value.htmlContent,
-                    text_content: emailPreview.value.textContent || ''
+                    subject: emailPreview.subject,
+                    html_content: emailPreview.htmlContent,
+                    text_content: emailPreview.htmlContent   // 与 html 保持一致，编辑后同步发送
                 });
                 if (response.data.code === 200) {
                     ElMessage.success(response.data.message);
@@ -3251,11 +3249,9 @@ const app = createApp({
                 specificInfo: '',
                 recipients: ''
             };
-            emailPreview.value = {
-                subject: '',
-                htmlContent: '',
-                textContent: ''
-            };
+            emailPreview.subject = '';
+            emailPreview.htmlContent = '';
+            emailPreview.textContent = '';
         };
 
         // 使用快速模板
@@ -4703,7 +4699,7 @@ const app = createApp({
             psychologyMessages, psychologyQuestion, psychologyLoading, psychologyChatContainer, sendPsychologyQuestion, emotionTags, selectedEmotion, initPsychologyMessages, psychologyRole,
             // 邮件发送
             emailForm, emailPreview, emailConfig, emailGenerating, emailSending, emailTesting, testEmailTo,
-            loadEmailConfig, generateEmail, generateAndSendEmail, testEmailService, resetEmailForm, useTemplate, formatEmailPreview,
+            loadEmailConfig, generateEmail, generateAndSendEmail, testEmailService, resetEmailForm, useTemplate,
             // 作业提交
             showHomeworkDialog, homeworkForm, homeworkSubmitting, homeworkDragOver,
             submitHomework, handleHomeworkFileSelect, handleHomeworkFileDrop
