@@ -75,7 +75,7 @@ async def lifespan(app: FastAPI):
 
 # 创建 FastAPI 应用
 app = FastAPI(
-    title="沃林学生管理系统",
+    title="拾光学子成长管理平台",
     description="FastAPI + MySQL 学生信息/成绩/就业/统计管理",
     version="1.0.0",
     lifespan=lifespan
@@ -147,7 +147,7 @@ app.include_router(homework_router)
 # 创建所有表
 Base.metadata.create_all(bind=engine)
 app_logger.info("=" * 50)
-app_logger.info("沃林学生管理系统启动")
+app_logger.info("拾光学子成长管理平台启动")
 app_logger.info("=" * 50)
 
 
@@ -157,7 +157,7 @@ def root():
     <!DOCTYPE html>
     <html>
     <body>
-        <h1>学生管理系统运行成功！</h1>
+        <h1>拾光学子成长管理平台运行成功！</h1>
         <p><a href="/docs" target="_blank">Swagger 文档</a></p>
         <p><a href="/static/index.html" target="_blank">前端界面</a></p>
     </body>

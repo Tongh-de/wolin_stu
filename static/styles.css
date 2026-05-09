@@ -1,5 +1,5 @@
 /* ============================================
-   沃林学生管理系统 - 全局样式
+   拾光学子成长管理平台 - 全局样式
    ============================================ */
 
 /* 字体与基础 */
@@ -8,11 +8,73 @@
     box-sizing: border-box;
 }
 
+/* 覆盖 Tailwind 默认白色背景（排除聊天气泡） */
+.bg-white { background-color: transparent !important; }
+.bg-gray-50, .bg-gray-100, .bg-gray-200 { background-color: transparent !important; }
+.bg-blue-50, .bg-blue-100 { background-color: transparent !important; }
+.bg-orange-50, .bg-orange-100 { background-color: transparent !important; }
+.bg-purple-50, .bg-purple-100 { background-color: transparent !important; }
+.bg-green-50, .bg-green-100 { background-color: transparent !important; }
+.bg-red-50, .bg-red-100 { background-color: transparent !important; }
+.bg-yellow-50, .bg-yellow-100 { background-color: transparent !important; }
+.bg-indigo-50, .bg-indigo-100 { background-color: transparent !important; }
+.bg-pink-50, .bg-pink-100 { background-color: transparent !important; }
+
+/* Element Plus 默认白色背景覆盖 */
+.el-message-box { background-color: transparent !important; }
+.el-dialog { background-color: transparent !important; }
+.el-table { background-color: transparent !important; }
+.el-table th { background-color: transparent !important; }
+.el-table tr { background-color: transparent !important; }
+.el-card { background-color: transparent !important; border: none !important; }
+.el-form-item__content { background: transparent !important; }
+.el-tabs__header { background: transparent !important; }
+.el-tab-pane { background: transparent !important; }
+.el-select-dropdown { background-color: transparent !important; }
+.el-dropdown-menu { background-color: transparent !important; }
+
 body {
-    background: linear-gradient(135deg, #f0f7ff 0%, #e8f4fd 100%);
+    background: url('/static/xuyuan.jpg') no-repeat center center fixed;
+    background-size: cover;
     min-height: 100vh;
     margin: 0;
     color: #1e293b;
+    position: relative;
+}
+
+/* 背景遮罩（完全透明） */
+body::before {
+    content: '';
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: transparent;
+    z-index: -1;
+}
+
+/* 主内容区域 */
+.main-content {
+    background: transparent;
+    border-radius: 16px;
+    box-shadow: none;
+}
+
+/* 卡片效果 */
+.stat-card,
+.chat-container,
+.table-container,
+.form-container {
+    background: transparent;
+}
+
+/* 通用卡片样式 - 透明背景 */
+.card,
+.card-header,
+.card-body {
+    background: transparent !important;
+    border: none;
 }
 
 /* 滚动条美化 */
@@ -25,10 +87,27 @@ body {
    登录框样式
    ============================================ */
 .login-container {
-    background: linear-gradient(135deg, #ffffff 0%, #f8fafc 100%);
+    background: rgba(255, 255, 255, 0.7);
+    backdrop-filter: blur(10px);
     border-radius: 24px;
-    box-shadow: 0 25px 50px -12px rgba(37, 99, 235, 0.15),
-                0 0 0 1px rgba(37, 99, 235, 0.05);
+    box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.15),
+                0 0 0 1px rgba(255, 255, 255, 0.3);
+}
+
+/* 登录页面背景 */
+.login-bg {
+    background: url('/static/xuyuan.jpg') no-repeat center center fixed !important;
+    background-size: cover !important;
+}
+
+.login-bg::before {
+    content: '';
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background: rgba(255, 255, 255, 0.5);
 }
 .login-logo {
     width: 72px;
@@ -43,16 +122,17 @@ body {
 .login-input {
     width: 100%;
     padding: 14px 18px;
-    border: 2px solid #e2e8f0;
+    border: 2px solid rgba(255, 255, 255, 0.2);
     border-radius: 12px;
     font-size: 15px;
     transition: all 0.3s ease;
-    background: #fafbfc;
+    background: rgba(255, 255, 255, 0.1);
+    color: #1e293b;
 }
 .login-input:focus {
     outline: none;
     border-color: #2563eb;
-    background: #ffffff;
+    background: rgba(255, 255, 255, 0.15);
     box-shadow: 0 0 0 4px rgba(37, 99, 235, 0.1);
 }
 .login-btn {
@@ -78,11 +158,12 @@ body {
    ============================================ */
 .sidebar {
     width: 260px;
-    background: linear-gradient(180deg, #1e40af 0%, #2563eb 100%);
-    box-shadow: 4px 0 20px rgba(37, 99, 235, 0.15);
+    background: rgba(30, 64, 175, 0.85);
+    backdrop-filter: blur(10px);
+    box-shadow: 4px 0 20px rgba(0, 0, 0, 0.1);
 }
 .sidebar-logo {
-    background: rgba(255, 255, 255, 0.15);
+    background: rgba(255, 255, 255, 0.1);
     border-bottom: 1px solid rgba(255, 255, 255, 0.1);
 }
 .nav-item {
@@ -101,7 +182,7 @@ body {
     color: #ffffff;
 }
 .nav-item.active {
-    background: rgba(255, 255, 255, 0.95);
+    background: rgba(255, 255, 255, 0.9);
     color: #2563eb;
     font-weight: 600;
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
@@ -112,9 +193,10 @@ body {
    顶部栏
    ============================================ */
 .topbar {
-    background: #ffffff;
-    border-bottom: 1px solid #e2e8f0;
-    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.04);
+    background: transparent;
+    backdrop-filter: blur(10px);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
 }
 .user-avatar {
     width: 40px;
@@ -132,17 +214,18 @@ body {
    统计卡片
    ============================================ */
 .stat-card {
-    background: #ffffff;
+    background: transparent;
+    backdrop-filter: blur(10px);
     border-radius: 16px;
     padding: 24px;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
-    border: 1px solid #f1f5f9;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     transition: all 0.3s ease;
 }
 .stat-card:hover {
-    transform: translateY(-4px);
-    box-shadow: 0 12px 32px rgba(37, 99, 235, 0.12);
-    border-color: #dbeafe;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.08);
+    border-color: rgba(255, 255, 255, 0.3);
 }
 .stat-icon {
     width: 56px;
@@ -153,10 +236,10 @@ body {
     justify-content: center;
     font-size: 24px;
 }
-.stat-icon.blue { background: #dbeafe; color: #2563eb; }
-.stat-icon.green { background: #dcfce7; color: #16a34a; }
-.stat-icon.amber { background: #fef3c7; color: #d97706; }
-.stat-icon.rose { background: #ffe4e6; color: #e11d48; }
+.stat-icon.blue { background: rgba(219, 234, 254, 0.8); color: #2563eb; }
+.stat-icon.green { background: rgba(220, 252, 231, 0.8); color: #16a34a; }
+.stat-icon.amber { background: rgba(254, 243, 199, 0.8); color: #d97706; }
+.stat-icon.rose { background: rgba(255, 228, 230, 0.8); color: #e11d48; }
 
 /* ============================================
    RAG 智能问答容器
@@ -164,17 +247,19 @@ body {
 .rag-container {
     display: flex;
     gap: 20px;
-    height: 580px;
+    height: calc(100vh - 180px);
+    max-height: 600px;
 }
 .rag-chat-area {
     flex: 1;
     display: flex;
     flex-direction: column;
-    background: #ffffff;
+    background: transparent;
+    backdrop-filter: blur(10px);
     border-radius: 16px;
     overflow: hidden;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
-    border: 1px solid #f1f5f9;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.2);
 }
 .rag-header {
     display: flex;
@@ -200,14 +285,17 @@ body {
 .chat-messages {
     flex: 1;
     overflow-y: auto;
-    padding: 20px;
-    background: #f8fafc;
+    padding: 16px 20px;
+    background: transparent;
+    display: flex;
+    flex-direction: column;
+    color: #1e293b;
 }
 
 /* 欢迎消息 */
 .welcome-message {
     text-align: center;
-    padding: 40px 20px;
+    padding: 24px 20px;
     color: #64748b;
 }
 .welcome-icon {
@@ -232,12 +320,12 @@ body {
 }
 .quick-label { font-size: 13px; color: #94a3b8; }
 .quick-btn {
-    background: white;
-    border: 1px solid #e2e8f0;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.25);
     padding: 8px 16px;
     border-radius: 20px;
     font-size: 13px;
-    color: #475569;
+    color: #1e293b;
     cursor: pointer;
     transition: all 0.3s;
 }
@@ -246,8 +334,8 @@ body {
 /* 消息样式 */
 .message-wrapper {
     display: flex;
-    gap: 12px;
-    margin-bottom: 16px;
+    gap: 10px;
+    margin-bottom: 12px;
     animation: fadeIn 0.3s ease;
 }
 @keyframes fadeIn {
@@ -257,26 +345,29 @@ body {
 .user-message { flex-direction: row-reverse; }
 .message-content {
     max-width: 75%;
-    padding: 12px 16px;
-    border-radius: 16px;
-    line-height: 1.6;
+    padding: 10px 14px;
+    border-radius: 14px;
+    line-height: 1.5;
     font-size: 14px;
 }
 .user-message .message-content {
     background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
     color: white;
     border-bottom-right-radius: 4px;
+    border: 1px solid rgba(102, 126, 234, 0.3);
+    box-shadow: 0 2px 8px rgba(102, 126, 234, 0.25);
 }
 .ai-message .message-content {
-    background: white;
-    border: 1px solid #e2e8f0;
-    color: #334155;
+    background: #ffffff;
+    border: 1px solid rgba(200, 200, 220, 0.6);
+    color: #1e293b;
     border-bottom-left-radius: 4px;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
 }
 .message-content p { margin: 0; white-space: pre-wrap; word-break: break-word; }
 .avatar {
-    width: 36px;
-    height: 36px;
+    width: 32px;
+    height: 32px;
     border-radius: 50%;
     display: flex;
     align-items: center;
@@ -284,7 +375,7 @@ body {
     flex-shrink: 0;
 }
 .user-avatar { background: linear-gradient(135deg, #667eea 0%, #764ba2 100%); color: white; }
-.ai-avatar { background: #f1f5f9; color: #667eea; }
+.ai-avatar { background: rgba(241, 245, 249, 0.9); color: #667eea; }
 
 /* 打字动画 */
 .typing-indicator { display: flex; gap: 4px; padding: 4px 0; }
@@ -317,7 +408,7 @@ body {
 }
 .code-block code { background: none; padding: 0; color: inherit; }
 .inline-code {
-    background: #f1f5f9;
+    background: rgba(241, 245, 249, 0.8);
     color: #7c3aed;
     padding: 2px 6px;
     border-radius: 4px;
@@ -327,9 +418,10 @@ body {
 
 /* 输入区域 */
 .chat-input-area {
-    padding: 16px 20px;
-    background: white;
-    border-top: 1px solid #f1f5f9;
+    padding: 12px 20px;
+    background: transparent;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+    flex-shrink: 0;
 }
 .input-wrapper {
     display: flex;
@@ -338,15 +430,20 @@ body {
 }
 .input-wrapper input {
     flex: 1;
-    padding: 12px 16px;
-    border: 2px solid #e2e8f0;
+    padding: 10px 16px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
     border-radius: 24px;
     font-size: 14px;
     outline: none;
     transition: border-color 0.3s;
+    background: rgba(255, 255, 255, 0.1);
+    color: #1e293b;
 }
-.input-wrapper input:focus { border-color: #667eea; }
-.input-wrapper input:disabled { background: #f8fafc; cursor: not-allowed; }
+.input-wrapper input::placeholder {
+    color: rgba(30, 41, 59, 0.4);
+}
+.input-wrapper input:focus { border-color: #667eea; background: rgba(255, 255, 255, 0.15); }
+.input-wrapper input:disabled { background: transparent; cursor: not-allowed; }
 .send-btn {
     width: 44px;
     height: 44px;
@@ -366,11 +463,12 @@ body {
 /* 右侧边栏 */
 .rag-sidebar {
     width: 240px;
-    background: white;
+    background: transparent;
+    backdrop-filter: blur(10px);
     border-radius: 16px;
     overflow: hidden;
-    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.04);
-    border: 1px solid #f1f5f9;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    border: 1px solid rgba(255, 255, 255, 0.2);
     display: flex;
     flex-direction: column;
 }
@@ -390,7 +488,7 @@ body {
     justify-content: space-between;
     align-items: center;
     padding: 12px 0;
-    border-bottom: 1px solid #f1f5f9;
+    border-bottom: 1px solid rgba(241, 245, 249, 0.5);
 }
 .stat-item:last-child { border-bottom: none; }
 .stat-label { color: #64748b; font-size: 13px; }
@@ -398,17 +496,185 @@ body {
 .stat-value.success { color: #10b981; }
 .sidebar-tip {
     padding: 16px;
-    background: #f8fafc;
-    border-top: 1px solid #f1f5f9;
+    background: transparent;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
 }
 .sidebar-tip i { color: #667eea; margin-right: 8px; }
 
 /* ============================================
    邮件发送模块样式
    ============================================ */
+/* 邮件区域整体布局优化 */
+.email-section {
+    height: calc(100vh - 120px);
+    overflow: hidden;
+}
+
+.email-main-grid {
+    display: grid;
+    grid-template-columns: 1fr 280px;
+    gap: 16px;
+    height: 100%;
+}
+
+.email-form .el-form-item {
+    margin-bottom: 12px;
+}
+
 .email-form .el-form-item__label {
     font-weight: 500;
     color: #374151;
+    padding-bottom: 4px !important;
+    font-size: 13px;
+}
+
+.email-form .el-form-item__content {
+    line-height: 32px;
+}
+
+.email-form .el-select,
+.email-form .el-radio-group {
+    line-height: 32px;
+}
+
+.email-form .el-radio-button__inner {
+    padding: 6px 12px;
+    font-size: 13px;
+}
+
+.email-form .el-textarea__inner {
+    padding: 8px 12px;
+    font-size: 13px;
+}
+
+/* 邮件表单卡片优化 */
+.email-form-card {
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+}
+
+.email-form-card .card-body {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+    background: transparent;
+}
+
+/* 按钮组优化 */
+.email-btn-group {
+    display: flex;
+    gap: 10px;
+    margin-top: 12px;
+    padding-top: 12px;
+    border-top: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+.email-btn-group .btn {
+    padding: 8px 16px;
+    font-size: 13px;
+}
+
+/* 邮件预览优化 */
+.email-preview-card {
+    margin-top: 12px;
+}
+
+.email-preview-card .card-body {
+    padding: 12px 16px;
+    background: transparent;
+}
+
+.email-preview-subject {
+    font-size: 14px;
+    padding: 8px 12px;
+    background: transparent;
+    border: 1px solid rgba(255, 255, 255, 0.15);
+    border-radius: 6px;
+    margin-bottom: 10px;
+}
+
+.email-preview-body {
+    max-height: 200px;
+    overflow-y: auto;
+}
+
+/* 右侧面板优化 */
+.email-sidebar {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+    height: 100%;
+    overflow-y: auto;
+}
+
+.email-sidebar .card {
+    flex-shrink: 0;
+    background: transparent;
+}
+
+.email-sidebar .card-body {
+    padding: 12px 14px;
+    background: transparent;
+}
+
+.card-header {
+    background: transparent;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.15);
+}
+
+/* 状态卡片 */
+.email-status-item {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 6px 0;
+    font-size: 13px;
+}
+
+.email-status-item .label {
+    color: #64748b;
+}
+
+.email-status-item .value {
+    font-family: monospace;
+    color: #334155;
+}
+
+/* 模板按钮优化 */
+.email-template-btn {
+    padding: 10px 12px;
+    transition: all 0.2s ease;
+}
+
+.email-template-btn .icon {
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 14px;
+}
+
+.email-template-btn .title {
+    font-size: 13px;
+    font-weight: 500;
+}
+
+.email-template-btn .desc {
+    font-size: 11px;
+    color: #94a3b8;
+}
+
+/* 使用说明优化 */
+.email-guide {
+    font-size: 12px;
+    line-height: 1.6;
+}
+
+.email-guide li {
+    margin: 4px 0;
 }
 
 .email-preview-content {
@@ -455,4 +721,22 @@ body {
 .email-template-btn:hover {
     transform: translateY(-2px);
     box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}
+
+/* ============================================
+   聊天消息气泡 - 白色不透明背景
+   ============================================ */
+/* 使用更高特异性的选择器确保聊天气泡显示白色背景 */
+body div .bg-gray-100.text-gray-800,
+body div div.bg-white.rounded-2xl.rounded-tl-none,
+body div div.bg-white.rounded-2xl.rounded-tr-none,
+body div .shadow-sm.border.border-gray-100,
+body div .message-content,
+body div div.chat-message,
+body div div.chat-ai-msg,
+body div .ai-message .message-content,
+body div div[class*="chat"][class*="ai-msg"] {
+    background-color: #ffffff !important;
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1) !important;
+    border: 1px solid #e5e7eb !important;
 }

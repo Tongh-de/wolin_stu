@@ -228,7 +228,7 @@ class EmailService:
         self.smtp_port = int(os.getenv("SMTP_PORT", "587"))
         self.smtp_user = os.getenv("SMTP_USER", "")
         self.smtp_password = os.getenv("SMTP_PASSWORD", "")
-        self.smtp_from_name = os.getenv("SMTP_FROM_NAME", "学生管理系统")
+        self.smtp_from_name = os.getenv("SMTP_FROM_NAME", "拾光学子成长管理平台")
 
     def _create_message(
         self,
@@ -249,17 +249,27 @@ class EmailService:
         Returns:
             MIMEMultipart 邮件对象
         """
+        from email.utils import formataddr
+        
         msg = MIMEMultipart('alternative')
-        msg['From'] = Header(f"{self.smtp_from_name} <{self.smtp_user}>")
-        msg['To'] = ', '.join(to_emails)
+        # 正确编码中文发件人名称
+        msg['From'] = formataddr((str(Header(self.smtp_from_name, 'utf-8')), self.smtp_user))
+        msg['To'] = '; '.join(to_emails)  # RFC 822 标准：使用分号分隔多个收件人
         msg['Subject'] = Header(subject, 'utf-8')
 
-        # 添加纯文本版本（如果提供）
-        if text_content:
-            msg.attach(MIMEText(text_content, 'plain', 'utf-8'))
-
-        # 添加 HTML 版本
-        msg.attach(MIMEText(html_content, 'html', 'utf-8'))
+        # 判断内容是否为 HTML
+        is_html = html_content.strip().startswith('<')
+        
+        # 确定发送内容
+        if is_html:
+            # HTML 内容：发送纯文本（如果提供）和 HTML
+            if text_content:
+                msg.attach(MIMEText(text_content, 'plain', 'utf-8'))
+            msg.attach(MIMEText(html_content, 'html', 'utf-8'))
+        else:
+            # 纯文本内容：只发送纯文本格式，不发送 HTML
+            plain_text = text_content if text_content else html_content
+            msg.attach(MIMEText(plain_text, 'plain', 'utf-8'))
 
         return msg
 

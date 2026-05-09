@@ -142,7 +142,24 @@ class StatisticsService:
     def top5_salary_students(db: Session):
         from model.employment import Employment
         from model.class_model import Class
-        top5 = db.query(Employment.stu_id, Employment.stu_name, Employment.company, Employment.salary, Employment.offer_time, Class.class_name).join(Class, Employment.class_id == Class.class_id).filter(Employment.is_deleted == False, Employment.salary.isnot(None), Class.is_deleted == False).order_by(desc(Employment.salary)).limit(5).all()
+        from model.student import StuBasicInfo
+        top5 = db.query(
+            StuBasicInfo.stu_id, 
+            StuBasicInfo.stu_name, 
+            Employment.company, 
+            Employment.salary, 
+            Employment.offer_time, 
+            Class.class_name
+        ).join(
+            StuBasicInfo, Employment.stu_id == StuBasicInfo.stu_id
+        ).join(
+            Class, Employment.class_id == Class.class_id
+        ).filter(
+            Employment.is_deleted == False, 
+            Employment.salary.isnot(None), 
+            StuBasicInfo.is_deleted == False,
+            Class.is_deleted == False
+        ).order_by(desc(Employment.salary)).limit(5).all()
         result = [{"stu_name": row.stu_name, "class_name": row.class_name, "salary": row.salary, "offer_time": row.offer_time, "company": row.company} for row in top5]
         return {"code": 200, "data": result}
 
@@ -238,13 +255,66 @@ class StatisticsService:
     def dashboard_stats(db: Session):
         from model.student import StuBasicInfo
         from model.class_model import Class
+        from model.teachers import Teacher
         from model.employment import Employment
+        
+        # 基础统计
         total_students = db.query(StuBasicInfo).filter(StuBasicInfo.is_deleted == False).count()
         total_classes = db.query(Class).filter(Class.is_deleted == False).count()
+        total_teachers = db.query(Teacher).filter(Teacher.is_deleted == False).count()
+        
+        # 平均年龄
         avg_age_result = db.query(func.avg(StuBasicInfo.age)).filter(StuBasicInfo.is_deleted == False).first()
         avg_age = round(avg_age_result[0], 1) if avg_age_result[0] else 0
+        
+        # 就业统计
         employed = db.query(func.count(distinct(Employment.stu_id))).filter(Employment.is_deleted == False, Employment.salary.isnot(None)).scalar() or 0
+        unemployed = total_students - employed
         employment_rate = round(employed / total_students * 100, 1) if total_students > 0 else 0
-        top_salary = db.query(Employment.stu_name, Class.class_name, Employment.salary, Employment.company).join(Class, Employment.class_id == Class.class_id).filter(Employment.is_deleted == False, Employment.salary.isnot(None), Class.is_deleted == False).order_by(Employment.salary.desc()).limit(5).all()
-        top_salary_list = [{"stu_name": row.stu_name, "class_name": row.class_name, "salary": row.salary, "company": row.company} for row in top_salary]
-        return {"code": 200, "data": {"total_students": total_students, "total_classes": total_classes, "avg_age": avg_age, "employment_rate": employment_rate, "top_salary": top_salary_list}}
+        
+        # 高薪榜 TOP5 - 从 StuBasicInfo 获取姓名，确保不为空
+        from model.student import StuBasicInfo
+        top_salary = db.query(
+            StuBasicInfo.stu_name, 
+            Class.class_name, 
+            Employment.salary, 
+            Employment.company
+        ).join(
+            StuBasicInfo, Employment.stu_id == StuBasicInfo.stu_id
+        ).join(
+            Class, Employment.class_id == Class.class_id
+        ).filter(
+            Employment.is_deleted == False, 
+            Employment.salary.isnot(None), 
+            StuBasicInfo.is_deleted == False,
+            Class.is_deleted == False
+        ).order_by(Employment.salary.desc()).limit(5).all()
+        top_salary_list = [{"name": row.stu_name, "class_name": row.class_name, "salary": row.salary, "company": row.company} for row in top_salary]
+        
+        # 班级人数分布
+        class_stats = db.query(
+            Class.class_id,
+            Class.class_name,
+            func.count(StuBasicInfo.stu_id).label("count")
+        ).join(StuBasicInfo, StuBasicInfo.class_id == Class.class_id).filter(
+            Class.is_deleted == False, 
+            StuBasicInfo.is_deleted == False
+        ).group_by(Class.class_id, Class.class_name).all()
+        class_distribution = [{"class_name": row.class_name, "count": row.count} for row in class_stats]
+        
+        return {
+            "code": 200, 
+            "data": {
+                "total_students": total_students, 
+                "total_classes": total_classes, 
+                "total_teachers": total_teachers,
+                "avg_age": avg_age, 
+                "employment_rate": employment_rate, 
+                "top_salary": top_salary_list,
+                "class_distribution": class_distribution,
+                "employment_stats": {
+                    "employed": employed,
+                    "unemployed": unemployed
+                }
+            }
+        }

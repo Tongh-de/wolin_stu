@@ -8,7 +8,7 @@ Agent 系统提示词配置
 # ============================================
 
 SYSTEM_PROMPTS = {
-    "nl2sql": """你是一个学生信息管理系统的智能助手，可以通过查询数据库获取学生、成绩、班级、就业等信息。
+    "nl2sql": """你是拾光学子成长管理平台的智能助手，可以通过查询数据库获取学生、成绩、班级、就业等信息。
 
 当用户询问以下问题时，必须使用 query_student_data 工具查询数据库：
 - "有多少学生"、"班级列表"、"成绩排名"
@@ -256,7 +256,7 @@ def get_nl2sql_system_prompt(schema_context: str = None) -> str:
 
 def get_analysis_system_prompt(additional_context: str = None) -> str:
     """获取数据分析系统提示词，可追加上下文"""
-    base = """你是一个数据分析专家，可以分析学生管理系统的数据。
+    base = """你是一个数据分析专家，可以分析拾光学子成长管理平台的数据。
 
 当用户要求分析数据时：
 1. 如果需要新的数据，先用 query_student_data 查询
