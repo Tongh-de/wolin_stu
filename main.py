@@ -15,14 +15,29 @@ load_dotenv()
 
 # 检查必要的环境变量
 def check_required_env():
-    required = ["DASHSCOPE_API_KEY"]
+    required = [
+        "DASHSCOPE_API_KEY",  # 阿里云 DashScope API (用于 RAG 和部分 Agent 功能)
+        "KIMI_API_KEY",        # Kimi API (用于自然语言查询)
+        "SECRET_KEY",          # JWT 密钥 (至少 32 字符)
+        "SQLALCHEMY_DATABASE_URL"  # 数据库连接字符串
+    ]
     missing = [k for k in required if not os.getenv(k)]
     if missing:
         print(f"错误: 缺少必要的环境变量: {', '.join(missing)}")
         print("请在 .env 文件中设置以下变量:")
         for k in missing:
-            print(f"  {k}=your-api-key-here")
+            if k == "SECRET_KEY":
+                print(f"  {k}=your-strong-secret-key-at-least-32-chars")
+            else:
+                print(f"  {k}=your-api-key-here")
         return False
+    
+    # 检查 SECRET_KEY 长度
+    secret_key = os.getenv("SECRET_KEY", "")
+    if len(secret_key) < 32:
+        print(f"错误: SECRET_KEY 长度必须至少 32 个字符，当前长度: {len(secret_key)}")
+        return False
+    
     return True
 
 if not check_required_env():
@@ -37,7 +52,8 @@ from controllers import (
     employment_router,
     statistics_router,
     query_router,
-    auth_router
+    auth_router,
+    email_router
 )
 from controllers.rag_router import router as rag_router
 from services.agent_service import router as agent_router
@@ -123,6 +139,7 @@ app.include_router(employment_router)
 app.include_router(statistics_router)
 app.include_router(query_router)
 app.include_router(auth_router)
+app.include_router(email_router)
 app.include_router(rag_router)
 app.include_router(agent_router)
 app.include_router(homework_router)

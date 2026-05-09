@@ -23,3 +23,14 @@ class EmploymentResp(BaseModel):
 
     class Config:
         from_attributes = True
+
+
+class EmploymentCreate(BaseModel):
+    """创建就业信息的请求模型"""
+    stu_id: int
+    stu_name: str
+    class_id: int
+    open_time: Optional[date] = None
+    offer_time: Optional[date] = None
+    company: Optional[str] = None
+    salary: Optional[float] = Field(None, gt=0)

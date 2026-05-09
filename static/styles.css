@@ -402,3 +402,57 @@ body {
     border-top: 1px solid #f1f5f9;
 }
 .sidebar-tip i { color: #667eea; margin-right: 8px; }
+
+/* ============================================
+   邮件发送模块样式
+   ============================================ */
+.email-form .el-form-item__label {
+    font-weight: 500;
+    color: #374151;
+}
+
+.email-preview-content {
+    font-family: 'Microsoft YaHei', Arial, sans-serif;
+    line-height: 1.8;
+}
+
+.email-preview-content h1,
+.email-preview-content h2,
+.email-preview-content h3 {
+    color: #1e40af;
+    margin-top: 0;
+}
+
+.email-preview-content p {
+    margin: 12px 0;
+}
+
+.email-preview-content ul,
+.email-preview-content ol {
+    margin: 12px 0;
+    padding-left: 24px;
+}
+
+.email-preview-content li {
+    margin: 6px 0;
+}
+
+.email-preview-content strong {
+    color: #dc2626;
+}
+
+/* 邮件按钮组 */
+.email-actions {
+    display: flex;
+    gap: 12px;
+    flex-wrap: wrap;
+}
+
+.email-template-btn {
+    transition: all 0.3s ease;
+}
+
+.email-template-btn:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
+}

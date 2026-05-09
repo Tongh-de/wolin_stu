@@ -97,6 +97,17 @@ const API_CONFIG = {
         UPLOAD: '/homework/upload',
         LIST: '/homework/list',
         DOWNLOAD: (filename) => `/homework/download/${filename}`
+    },
+
+    // 邮件服务
+    EMAIL: {
+        CONFIG: '/email/config',
+        SEND: '/email/send',
+        VERIFICATION_CODE: '/email/verification-code',
+        NOTIFICATION: '/email/notification',
+        TEST: '/email/test',
+        GENERATE: '/email/generate',
+        GENERATE_AND_SEND: '/email/generate-and-send'
     }
 };
 

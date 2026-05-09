@@ -5,6 +5,11 @@ from model.employment import Employment
 
 class EmploymentService:
     @staticmethod
+    def get_all_employments(db: Session):
+        """获取所有未删除的就业信息"""
+        return db.query(Employment).filter(Employment.is_deleted == False).all()
+
+    @staticmethod
     def get_employment_by_stu_id(db: Session, stu_id: int):
         return db.query(Employment).filter(Employment.stu_id == stu_id, Employment.is_deleted == False).first()
 
@@ -24,8 +29,10 @@ class EmploymentService:
             db.commit()
             db.refresh(employment)
             return employment
-        except Exception:
+        except Exception as e:
             db.rollback()
+            from utils.logger import db_logger
+            db_logger.error(f"更新就业信息失败: {e}")
             return False
 
     @staticmethod
@@ -34,8 +41,10 @@ class EmploymentService:
             employment.is_deleted = True
             db.commit()
             return True
-        except Exception:
+        except Exception as e:
             db.rollback()
+            from utils.logger import db_logger
+            db_logger.error(f"删除就业信息失败: {e}")
             return False
 
     @staticmethod
@@ -45,6 +54,30 @@ class EmploymentService:
         db.commit()
         db.refresh(emp)
         return emp
+
+    @staticmethod
+    def create_employment(db: Session, create_data):
+        """创建就业信息"""
+        try:
+            emp = Employment(
+                stu_id=create_data.stu_id,
+                stu_name=create_data.stu_name,
+                class_id=create_data.class_id,
+                open_time=create_data.open_time,
+                offer_time=create_data.offer_time,
+                company=create_data.company,
+                salary=create_data.salary,
+                is_deleted=False
+            )
+            db.add(emp)
+            db.commit()
+            db.refresh(emp)
+            return emp
+        except Exception as e:
+            db.rollback()
+            from utils.logger import db_logger
+            db_logger.error(f"创建就业信息失败: {e}")
+            return False
 
     @staticmethod
     def get_employment_by_emp_id(db: Session, emp_id: int):
@@ -59,8 +92,10 @@ class EmploymentService:
             emp.is_deleted = False
             db.commit()
             return True
-        except Exception:
+        except Exception as e:
             db.rollback()
+            from utils.logger import db_logger
+            db_logger.error(f"恢复就业信息失败: {e}")
             return False
 
     @staticmethod

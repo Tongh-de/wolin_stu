@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, Query, HTTPException
 from sqlalchemy.orm import Session
 from database import get_db
 from services import TeacherService
-from schemas.teacher import TeacheresUpdata
+from schemas.teacher import TeacherUpdate
 from schemas import ResponseBase, ListResponse
 from utils.logger import get_logger
 from utils.auth_deps import get_current_user, require_admin, require_teacher_or_admin
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/teacher", tags=['老师管理模块'])
 
 @router.post("/", response_model=ResponseBase, summary="新增老师")
 def create_teacher(
-        teacher: TeacheresUpdata, 
+        teacher: TeacherUpdate, 
         db: Session = Depends(get_db),
         current_user: User = Depends(require_admin)  # 仅管理员
 ):
@@ -61,7 +61,7 @@ def get_all_teachers(
 @router.put("/{teacher_id}", response_model=ResponseBase, summary="修改老师信息")
 def update_teacher(
         teacher_id: int, 
-        teacher: TeacheresUpdata, 
+        teacher: TeacherUpdate, 
         db: Session = Depends(get_db),
         current_user: User = Depends(require_admin)  # 仅管理员
 ):

@@ -1,12 +1,12 @@
 from sqlalchemy.orm import Session
 from model.teachers import Teacher
 from model.class_model import Class
-from schemas.teacher import TeacheresUpdata
+from schemas.teacher import TeacherUpdate
 
 
 class TeacherService:
     @staticmethod
-    def create_teacher(db: Session, teacher: TeacheresUpdata):
+    def create_teacher(db: Session, teacher: TeacherUpdate):
         db_teacher = Teacher(teacher_name=teacher.teacher_name, gender=teacher.gender, phone=teacher.phone, role=teacher.role, is_deleted=False)
         db.add(db_teacher)
         db.commit()
@@ -31,7 +31,7 @@ class TeacherService:
         return [{"teacher_id": i.teacher_id, "teacher_name": i.teacher_name, "phone": i.phone, "role": i.role, "gender": i.gender} for i in data]
 
     @staticmethod
-    def update_teacher(db: Session, teacher_id: int, teacher: TeacheresUpdata):
+    def update_teacher(db: Session, teacher_id: int, teacher: TeacherUpdate):
         db_teacher = db.query(Teacher).filter(Teacher.teacher_id == teacher_id, Teacher.is_deleted == False).first()
         if not db_teacher:
             return None

@@ -19,7 +19,7 @@ class StuBasicInfo(Base):
     is_deleted = Column(Boolean, default=False, nullable=False)
 
     advisor_id = Column(Integer, ForeignKey("teacher.teacher_id"))
-    # 顾问对应的关系 别问为啥名字对不上 都是泪 再问就是妥协的艺术
+    # 顾问对应的关系
     counselors = relationship("Teacher", foreign_keys=[advisor_id], back_populates="students")
 
     # 学生所在的班级, 一对多 外键指向班级表中的一个班级

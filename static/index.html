@@ -15,7 +15,91 @@
     
     <!-- 模块化样式和脚本 -->
     <link rel="stylesheet" href="/static/styles.css">
-    <script src="/static/js/api-config.js"></script>
+    <script>
+    // 内联 API 配置，避免加载顺序问题
+    window.API_CONFIG = {
+        BASE_URL: '',
+        AUTH: {
+            LOGIN: '/auth/login',
+            REGISTER: '/auth/register',
+            LOGOUT: '/auth/logout'
+        },
+        STUDENTS: {
+            LIST: '/students/',
+            DETAIL: (id) => `/students/${id}`,
+            CREATE: '/students/',
+            UPDATE: (id) => `/students/${id}`,
+            DELETE: (id) => `/students/${id}`
+        },
+        CLASS: {
+            LIST: '/class/',
+            DETAIL: (id) => `/class/${id}`,
+            CREATE: '/class/',
+            UPDATE: (id) => `/class/${id}`,
+            DELETE: (id) => `/class/${id}`,
+            RESTORE: (id) => `/class/${id}/restore`
+        },
+        TEACHERS: {
+            LIST: '/teachers/',
+            DETAIL: (id) => `/teacher/${id}`,
+            CREATE: '/teachers/',
+            UPDATE: (id) => `/teacher/${id}`,
+            DELETE: (id) => `/teacher/${id}`
+        },
+        EXAM: {
+            RECORDS: '/exam/records',
+            SUBMIT: '/exam/',
+            UPDATE: '/exam/',
+            DELETE: (stuId) => `/exam/${stuId}`
+        },
+        EMPLOYMENT: {
+            LIST: '/employment/list',
+            DETAIL: (id) => `/employment/${id}`,
+            CREATE: '/employment/',
+            UPDATE: '/employment/',
+            DELETE: (id) => `/employment/delete/${id}`
+        },
+        STATS: {
+            DASHBOARD: '/statistics/dashboard/all',
+            AGE_STAT: '/statistics/student/age-stat',
+            CLASS_GENDER: '/statistics/student/class-gender',
+            CLASS_AVG: '/statistics/score/class-average',
+            FAIL_LIST: '/statistics/score/fail-list'
+        },
+        QUERY: {
+            NATURAL: '/query/natural'
+        },
+        AGENT: {
+            CHAT: '/agent/chat',
+            MODELS: '/agent/models',
+            ROUTE: '/agent/route',
+            TOOLS: '/agent/tools',
+            TOOL_TEST: '/agent/tools/test',
+            MEMORY: '/agent/memory'
+        },
+        RAG: {
+            UPLOAD: '/rag/upload',
+            QUERY: '/rag/query',
+            SEARCH: '/rag/search',
+            STATS: '/rag/stats',
+            CLEAR: '/rag/clear'
+        },
+        HOMEWORK: {
+            UPLOAD: '/homework/upload',
+            LIST: '/homework/list',
+            DOWNLOAD: (filename) => `/homework/download/${filename}`
+        },
+        EMAIL: {
+            CONFIG: '/email/config',
+            SEND: '/email/send',
+            VERIFICATION_CODE: '/email/verification-code',
+            NOTIFICATION: '/email/notification',
+            TEST: '/email/test',
+            GENERATE: '/email/generate',
+            GENERATE_AND_SEND: '/email/generate-and-send'
+        }
+    };
+    </script>
     <script src="/static/js/utils.js"></script>
     <script src="/static/js/ai-service.js"></script>
     <script src="/static/js/data-service.js"></script>
@@ -442,6 +526,19 @@
             align-items: center;
             gap: 8px;
         }
+        .sidebar-header .refresh-btn {
+            margin-left: auto;
+            background: rgba(255,255,255,0.2);
+            border: none;
+            border-radius: 4px;
+            padding: 4px 8px;
+            cursor: pointer;
+            font-size: 12px;
+        }
+        .sidebar-header .refresh-btn:hover {
+            background: rgba(255,255,255,0.3);
+        }
+        }
         .sidebar-content {
             padding: 20px;
             flex: 1;
@@ -467,6 +564,9 @@
         }
         .stat-value.success {
             color: #10b981;
+        }
+        .stat-value.error {
+            color: #ef4444;
         }
         .sidebar-tip {
             padding: 16px;
@@ -1118,6 +1218,9 @@
                 <a @click="activeTab = 'management'" :class="['nav-item', { active: activeTab === 'management' }]" v-if="currentUser.role !== 'student'">
                     <i class="fas fa-database"></i>数据管理
                 </a>
+                <a @click="activeTab = 'email'" :class="['nav-item', { active: activeTab === 'email' }]" v-if="currentUser.role === 'admin' || currentUser.role === 'teacher'">
+                    <i class="fas fa-envelope"></i>邮件发送
+                </a>
             </nav>
             
             <!-- 底部退出 -->
@@ -1138,12 +1241,20 @@
                     </h2>
                 </div>
                 <div class="flex items-center gap-4">
-                    <div class="user-avatar">
+                    <div class="user-avatar" :style="{ background: currentUser.role === 'admin' ? 'linear-gradient(135deg, #f59e0b, #d97706)' : currentUser.role === 'teacher' ? 'linear-gradient(135deg, #3b82f6, #2563eb)' : 'linear-gradient(135deg, #10b981, #059669)' }">
                         <i class="fas fa-user"></i>
                     </div>
-                    <div>
-                        <p class="font-medium text-gray-700">{{ authUsername }}</p>
-                        <p class="text-xs text-gray-500">管理员</p>
+                    <div class="flex flex-col">
+                        <p class="font-medium text-gray-800">{{ authUsername }}</p>
+                        <span v-if="currentUser.role === 'admin'" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-amber-100 text-amber-800 w-fit">
+                            <i class="fas fa-crown mr-1"></i>管理员
+                        </span>
+                        <span v-else-if="currentUser.role === 'teacher'" class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-blue-100 text-blue-800 w-fit">
+                            <i class="fas fa-chalkboard-teacher mr-1"></i>老师
+                        </span>
+                        <span v-else class="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-green-100 text-green-800 w-fit">
+                            <i class="fas fa-graduation-cap mr-1"></i>学生
+                        </span>
                     </div>
                 </div>
             </header>
@@ -1886,29 +1997,217 @@
                                     <div class="sidebar-header">
                                         <i class="fas fa-database"></i>
                                         <span>知识库状态</span>
+                                        <button @click="loadRagStats" class="refresh-btn" title="刷新状态">🔄</button>
                                     </div>
                                     <div class="sidebar-content">
                                         <div class="stat-item">
                                             <span class="stat-label">向量库</span>
-                                            <span class="stat-value success">已连接</span>
+                                            <span :class="['stat-value', ragStats.connected ? 'success' : 'error']">
+                                                {{ ragStats.connected ? '已连接' : '未连接' }}
+                                            </span>
                                         </div>
                                         <div class="stat-item">
-                                            <span class="stat-label">文档集合</span>
-                                            <span class="stat-value">4 个</span>
+                                            <span class="stat-label">集合名称</span>
+                                            <span class="stat-value">{{ ragStats.collectionName }}</span>
                                         </div>
                                         <div class="stat-item">
-                                            <span class="stat-label">检索模式</span>
-                                            <span class="stat-value">语义检索</span>
+                                            <span class="stat-label">Milvus</span>
+                                            <span class="stat-value">{{ ragStats.milvusHost }}</span>
                                         </div>
-                                    </div>
-                                    <div class="sidebar-tip">
-                                        <i class="fas fa-info-circle"></i>
-                                        <p>知识库包含升学指南、课程介绍等文档，可回答相关问题。</p>
+                                        <div class="stat-item">
+                                            <span class="stat-label">嵌入模型</span>
+                                            <span class="stat-value">{{ ragStats.embeddingModel }}</span>
+                                        </div>
                                     </div>
                                 </div>
                             </div>
                         </el-tab-pane>
                     </el-tabs>
+                </div>
+
+                <!-- ========== 邮件发送 ========== -->
+                <div v-if="activeTab === 'email'" class="space-y-5">
+                    <div class="grid grid-cols-1 lg:grid-cols-3 gap-5">
+                        <!-- AI 生成邮件 -->
+                        <div class="lg:col-span-2">
+                            <div class="card">
+                                <div class="card-header">
+                                    <i class="fas fa-magic text-purple-500"></i>AI 智能生成邮件
+                                </div>
+                                <div class="card-body">
+                                    <el-form label-position="top" class="email-form">
+                                        <el-form-item label="邮件目的">
+                                            <el-select v-model="emailForm.purpose" placeholder="请选择邮件目的" style="width: 100%">
+                                                <el-option label="📢 通知公告" value="notice"></el-option>
+                                                <el-option label="⏰ 提醒提醒" value="reminder"></el-option>
+                                                <el-option label="🎫 邀请活动" value="invitation"></el-option>
+                                                <el-option label="⚠️ 警告提醒" value="warning"></el-option>
+                                                <el-option label="🎉 祝贺表扬" value="congratulation"></el-option>
+                                            </el-select>
+                                        </el-form-item>
+                                        <el-form-item label="收件人类型">
+                                            <el-select v-model="emailForm.recipientType" placeholder="请选择收件人类型" style="width: 100%">
+                                                <el-option label="👨‍🎓 学生" value="student"></el-option>
+                                                <el-option label="👨‍👩‍👧 家长" value="parent"></el-option>
+                                                <el-option label="👨‍🏫 教师" value="teacher"></el-option>
+                                                <el-option label="👥 全部人员" value="all"></el-option>
+                                            </el-select>
+                                        </el-form-item>
+                                        <el-form-item label="语气风格">
+                                            <el-radio-group v-model="emailForm.tone">
+                                                <el-radio-button label="professional">专业正式</el-radio-button>
+                                                <el-radio-button label="formal">正式严肃</el-radio-button>
+                                                <el-radio-button label="friendly">友好亲切</el-radio-button>
+                                                <el-radio-button label="gentle">温和委婉</el-radio-button>
+                                            </el-radio-group>
+                                        </el-form-item>
+                                        <el-form-item label="具体内容描述">
+                                            <el-input type="textarea" v-model="emailForm.specificInfo" :rows="3" placeholder="请描述邮件的具体内容，如：考试时间地点、活动安排、注意事项等（可不填）"></el-input>
+                                        </el-form-item>
+                                        <el-form-item label="收件人邮箱（多个用逗号分隔）">
+                                            <el-input v-model="emailForm.recipients" placeholder="例如：student1@email.com, student2@email.com"></el-input>
+                                        </el-form-item>
+                                    </el-form>
+                                    <div class="flex gap-3 mt-4">
+                                        <button type="button" @click="generateEmail" :disabled="emailGenerating" class="btn btn-primary">
+                                            <i :class="emailGenerating ? 'fas fa-spinner fa-spin' : 'fas fa-magic'"></i>
+                                            {{ emailGenerating ? '生成中...' : '生成邮件内容' }}
+                                        </button>
+                                        <button type="button" @click="generateAndSendEmail" :disabled="emailSending || emailGenerating" class="btn btn-success">
+                                            <i :class="emailSending ? 'fas fa-spinner fa-spin' : 'fas fa-paper-plane'"></i>
+                                            {{ emailSending ? '发送中...' : '生成并发送' }}
+                                        </button>
+                                        <button type="button" @click="resetEmailForm" class="btn btn-outline">
+                                            <i class="fas fa-redo"></i>重置
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 生成的邮件预览 -->
+                            <div v-if="emailPreview.subject || emailPreview.htmlContent" class="card mt-5">
+                                <div class="card-header flex justify-between items-center">
+                                    <span><i class="fas fa-eye text-blue-500"></i>邮件预览</span>
+                                    <el-tag type="success">已生成</el-tag>
+                                </div>
+                                <div class="card-body">
+                                    <div class="mb-4">
+                                        <label class="text-sm font-medium text-gray-600">主题：</label>
+                                        <p class="text-gray-800 font-medium mt-1">{{ emailPreview.subject }}</p>
+                                    </div>
+                                        <div class="border-t border-gray-100 pt-4">
+                                        <label class="text-sm font-medium text-gray-600 mb-2 block">内容预览：</label>
+                                        <div class="bg-gray-50 p-4 rounded-lg max-h-64 overflow-y-auto">
+                                            <pre class="email-preview-content whitespace-pre-wrap font-sans text-sm">{{ emailPreview.htmlContent }}</pre>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- 右侧面板 -->
+                        <div class="space-y-5">
+                            <!-- 邮件配置状态 -->
+                            <div class="card">
+                                <div class="card-header">
+                                    <i class="fas fa-server text-green-500"></i>邮件服务状态
+                                </div>
+                                <div class="card-body">
+                                    <div class="space-y-3">
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-gray-500 text-sm">SMTP 主机</span>
+                                            <span class="text-gray-800 font-mono text-sm">{{ emailConfig.smtp_host || '-' }}</span>
+                                        </div>
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-gray-500 text-sm">SMTP 端口</span>
+                                            <span class="text-gray-800 font-mono text-sm">{{ emailConfig.smtp_port || '-' }}</span>
+                                        </div>
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-gray-500 text-sm">发件人</span>
+                                            <span class="text-gray-800 font-mono text-sm">{{ emailConfig.smtp_user || '-' }}</span>
+                                        </div>
+                                        <div class="flex justify-between items-center">
+                                            <span class="text-gray-500 text-sm">配置状态</span>
+                                            <el-tag :type="emailConfig.configured ? 'success' : 'danger'" size="small">
+                                                {{ emailConfig.configured ? '已配置' : '未配置' }}
+                                            </el-tag>
+                                        </div>
+                                    </div>
+                                    <div class="mt-4">
+                                        <input v-model="testEmailTo" type="email" placeholder="输入测试邮箱（不填则自动构造）" 
+                                               class="w-full px-3 py-2 border rounded focus:outline-none focus:ring-2 focus:ring-blue-500 mb-2">
+                                        <button @click="testEmailService" :disabled="emailTesting" class="btn btn-outline w-full">
+                                            <i :class="emailTesting ? 'fas fa-spinner fa-spin' : 'fas fa-paper-plane'"></i>
+                                            {{ emailTesting ? '测试中...' : '发送测试邮件' }}
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 快速模板 -->
+                            <div class="card">
+                                <div class="card-header">
+                                    <i class="fas fa-bolt text-amber-500"></i>快速模板
+                                </div>
+                                <div class="card-body">
+                                    <div class="space-y-2">
+                                        <button @click="useTemplate('exam')" class="w-full text-left px-4 py-3 bg-blue-50 hover:bg-blue-100 rounded-lg transition">
+                                            <div class="flex items-center gap-3">
+                                                <i class="fas fa-file-alt text-blue-500"></i>
+                                                <div>
+                                                    <p class="font-medium text-gray-800">考试通知</p>
+                                                    <p class="text-xs text-gray-500">发送考试安排通知</p>
+                                                </div>
+                                            </div>
+                                        </button>
+                                        <button @click="useTemplate('homework')" class="w-full text-left px-4 py-3 bg-orange-50 hover:bg-orange-100 rounded-lg transition">
+                                            <div class="flex items-center gap-3">
+                                                <i class="fas fa-book text-orange-500"></i>
+                                                <div>
+                                                    <p class="font-medium text-gray-800">作业提醒</p>
+                                                    <p class="text-xs text-gray-500">提醒学生完成作业</p>
+                                                </div>
+                                            </div>
+                                        </button>
+                                        <button @click="useTemplate('meeting')" class="w-full text-left px-4 py-3 bg-purple-50 hover:bg-purple-100 rounded-lg transition">
+                                            <div class="flex items-center gap-3">
+                                                <i class="fas fa-users text-purple-500"></i>
+                                                <div>
+                                                    <p class="font-medium text-gray-800">会议邀请</p>
+                                                    <p class="text-xs text-gray-500">邀请参加教师会议</p>
+                                                </div>
+                                            </div>
+                                        </button>
+                                        <button @click="useTemplate('vacation')" class="w-full text-left px-4 py-3 bg-green-50 hover:bg-green-100 rounded-lg transition">
+                                            <div class="flex items-center gap-3">
+                                                <i class="fas fa-calendar-alt text-green-500"></i>
+                                                <div>
+                                                    <p class="font-medium text-gray-800">放假通知</p>
+                                                    <p class="text-xs text-gray-500">发布假期安排通知</p>
+                                                </div>
+                                            </div>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <!-- 使用说明 -->
+                            <div class="card bg-gradient-to-br from-blue-50 to-indigo-50">
+                                <div class="card-header">
+                                    <i class="fas fa-info-circle text-blue-500"></i>使用说明
+                                </div>
+                                <div class="card-body text-sm text-gray-600 space-y-2">
+                                    <p>1. 选择邮件目的和收件人类型</p>
+                                    <p>2. 描述邮件的具体内容</p>
+                                    <p>3. AI 将自动生成专业的邮件</p>
+                                    <p>4. 确认后发送或修改内容</p>
+                                    <p class="text-amber-600 font-medium mt-3">
+                                        <i class="fas fa-exclamation-triangle mr-1"></i>学生账号无邮件发送权限
+                                    </p>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <!-- ========== 数据管理 ========== -->
@@ -2463,6 +2762,213 @@ const app = createApp({
             }
         });
         
+        // ============================================
+        // 知识库状态（实时）
+        // ============================================
+        const ragStats = ref({
+            connected: false,
+            collectionName: '-',
+            milvusHost: '-',
+            embeddingModel: '-'
+        });
+
+        // ============================================
+        // 邮件发送功能
+        // ============================================
+        const emailForm = ref({
+            purpose: 'notice',
+            recipientType: 'student',
+            tone: 'professional',
+            specificInfo: '',
+            recipients: ''
+        });
+
+        const emailPreview = ref({
+            subject: '',
+            htmlContent: '',
+            textContent: ''
+        });
+
+        const emailConfig = ref({
+            smtp_host: '',
+            smtp_port: 587,
+            smtp_user: '',
+            smtp_from_name: '',
+            configured: false
+        });
+
+        const emailGenerating = ref(false);
+        const emailSending = ref(false);
+        const emailTesting = ref(false);
+        const testEmailTo = ref('');
+
+        // 加载邮件配置
+        const loadEmailConfig = async () => {
+            try {
+                const response = await axios.get(window.API_CONFIG.EMAIL.CONFIG);
+                if (response.data) {
+                    emailConfig.value = response.data;
+                }
+            } catch (error) {
+                console.error('加载邮件配置失败:', error);
+            }
+        };
+
+        // 生成邮件内容
+        const generateEmail = async () => {
+            if (!emailForm.value.purpose) {
+                ElMessage.warning('请选择邮件目的');
+                return;
+            }
+            emailGenerating.value = true;
+            try {
+                const response = await axios.post(window.API_CONFIG.EMAIL.GENERATE, {
+                    purpose: emailForm.value.purpose,
+                    recipient_type: emailForm.value.recipientType,
+                    specific_info: emailForm.value.specificInfo,
+                    tone: emailForm.value.tone
+                });
+                if (response.data.code === 200) {
+                    emailPreview.value = {
+                        subject: response.data.data.subject,
+                        htmlContent: response.data.data.html_content,
+                        textContent: response.data.data.text_content
+                    };
+                    ElMessage.success('邮件内容生成成功');
+                }
+            } catch (error) {
+                console.error('生成邮件失败:', error);
+                ElMessage.error(error.response?.data?.detail || '生成邮件失败');
+            } finally {
+                emailGenerating.value = false;
+            }
+        };
+
+        // 生成并发送邮件
+        const generateAndSendEmail = async () => {
+            if (!emailForm.value.purpose) {
+                ElMessage.warning('请选择邮件目的');
+                return;
+            }
+            if (!emailForm.value.recipients.trim()) {
+                ElMessage.warning('请输入收件人邮箱');
+                return;
+            }
+            emailSending.value = true;
+            try {
+                const recipients = emailForm.value.recipients.split(',').map(e => e.trim()).filter(e => e);
+                const response = await axios.post(window.API_CONFIG.EMAIL.GENERATE_AND_SEND, {
+                    purpose: emailForm.value.purpose,
+                    recipient_type: emailForm.value.recipientType,
+                    specific_info: emailForm.value.specificInfo,
+                    tone: emailForm.value.tone,
+                    to_emails: recipients
+                });
+                if (response.data.code === 200) {
+                    emailPreview.value = {
+                        subject: response.data.data.subject,
+                        htmlContent: response.data.data.html_content,
+                        textContent: response.data.data.text_content
+                    };
+                    ElMessage.success(response.data.message);
+                }
+            } catch (error) {
+                console.error('发送邮件失败:', error);
+                ElMessage.error(error.response?.data?.detail || '发送邮件失败');
+            } finally {
+                emailSending.value = false;
+            }
+        };
+
+        // 测试邮件服务
+        const testEmailService = async () => {
+            emailTesting.value = true;
+            try {
+                const payload = {};
+                if (testEmailTo.value.trim()) {
+                    payload.to_email = testEmailTo.value.trim();
+                }
+                const response = await axios.post(window.API_CONFIG.EMAIL.TEST, payload);
+                if (response.data.code === 200) {
+                    ElMessage.success('测试邮件已发送，请查收');
+                }
+            } catch (error) {
+                console.error('测试邮件失败:', error);
+                ElMessage.error(error.response?.data?.detail || '测试邮件失败');
+            } finally {
+                emailTesting.value = false;
+            }
+        };
+
+        // 重置邮件表单
+        const resetEmailForm = () => {
+            emailForm.value = {
+                purpose: 'notice',
+                recipientType: 'student',
+                tone: 'professional',
+                specificInfo: '',
+                recipients: ''
+            };
+            emailPreview.value = {
+                subject: '',
+                htmlContent: '',
+                textContent: ''
+            };
+        };
+
+        // 使用快速模板
+        const useTemplate = (template) => {
+            const templates = {
+                exam: {
+                    purpose: 'notice',
+                    recipientType: 'student',
+                    specificInfo: '期末考试将于下周进行，请同学们做好复习准备。考试科目：语文、数学、英语。考试时间：上午9:00-11:00，下午14:00-16:00。地点：教学楼301、302教室。',
+                    tone: 'professional'
+                },
+                homework: {
+                    purpose: 'reminder',
+                    recipientType: 'student',
+                    specificInfo: '本周作业提醒：语文完成课后习题第15-20页，数学完成练习册第10章，英语背诵Unit 5单词并完成作文一篇。请于本周五前提交。',
+                    tone: 'friendly'
+                },
+                meeting: {
+                    purpose: 'invitation',
+                    recipientType: 'teacher',
+                    specificInfo: '本周五下午3点在会议室召开教师例会，讨论期末教学安排和学生管理工作。请各位老师准时参加，如有特殊情况请提前请假。',
+                    tone: 'professional'
+                },
+                vacation: {
+                    purpose: 'notice',
+                    recipientType: 'all',
+                    specificInfo: '寒假放假通知：1月15日至2月28日为寒假假期。请同学们注意安全，按时完成寒假作业，下学期开学时间：3月1日。',
+                    tone: 'friendly'
+                }
+            };
+            if (templates[template]) {
+                emailForm.value = { ...emailForm.value, ...templates[template] };
+                ElMessage.success('已应用模板');
+            }
+        };
+
+        // 加载知识库状态
+        const loadRagStats = async () => {
+            try {
+                const response = await axios.get('/rag/stats');
+                const stats = response.data?.data;
+                if (stats) {
+                    ragStats.value = {
+                        connected: stats.connected !== false,
+                        collectionName: stats.collection_name || '-',
+                        milvusHost: stats.milvus_host || '-',
+                        embeddingModel: stats.embedding_model || '-'
+                    };
+                }
+            } catch (error) {
+                ragStats.value.connected = false;
+                console.error('加载知识库状态失败:', error);
+            }
+        };
+        
         // 初始化心理疏导消息
         const initPsychologyMessages = () => {
             psychologyMessages.value = [{
@@ -2570,6 +3076,17 @@ const app = createApp({
         const setAuthToken = (token) => {
             if (token) axios.defaults.headers.common['Authorization'] = `Bearer ${token}`;
             else delete axios.defaults.headers.common['Authorization'];
+        };
+        
+        // 格式化邮件预览内容，将纯文本转换为HTML
+        const formatEmailPreview = (text) => {
+            if (!text) return '';
+            // 转义HTML特殊字符
+            let escaped = text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
+            // 将换行符转换为<br>，但保留空行作为段落分隔
+            escaped = escaped.replace(/\n\n/g, '</p><p>');
+            escaped = escaped.replace(/\n/g, '<br>');
+            return '<p>' + escaped + '</p>';
         };
         
         const resetSessionId = () => {
@@ -3708,7 +4225,7 @@ const app = createApp({
             kbChatMessages.value.push({
                 id: aiMsgId,
                 role: 'ai',
-                content: ''
+                content: '正在检索知识库...'
             });
             scrollChatToBottom();
 
@@ -3717,7 +4234,7 @@ const app = createApp({
                 const response = await fetch('/rag/query', {
                     method: 'POST',
                     headers: {
-                        'Content-Type': 'application/json',
+                        'Content-Type': 'application/json'
                     },
                     body: JSON.stringify({
                         question: question,
@@ -3725,25 +4242,32 @@ const app = createApp({
                     })
                 });
 
+                if (!response.ok) {
+                    throw new Error(`请求失败: ${response.status}`);
+                }
+
                 const reader = response.body.getReader();
                 const decoder = new TextDecoder();
                 let answerContent = '';
+                let hasReceivedAnswer = false;
 
                 while (true) {
                     const { done, value } = await reader.read();
                     if (done) break;
 
-                    const chunk = decoder.decode(value);
+                    const chunk = decoder.decode(value, { stream: true });
                     const lines = chunk.split('\n');
 
                     for (const line of lines) {
+                        if (line.trim() === '') continue;
                         if (line.startsWith('data: ')) {
-                            const data = line.slice(6);
+                            const data = line.slice(6).trim();
                             if (data === '[DONE]') continue;
 
                             try {
                                 const parsed = JSON.parse(data);
                                 if (parsed.type === 'answer' && parsed.content) {
+                                    hasReceivedAnswer = true;
                                     answerContent += parsed.content;
                                     // 实时更新消息内容
                                     const msg = kbChatMessages.value.find(m => m.id === aiMsgId);
@@ -3757,12 +4281,13 @@ const app = createApp({
                     }
                 }
 
-                // 如果没有收到任何内容
-                if (!answerContent) {
-                    const msg = kbChatMessages.value.find(m => m.id === aiMsgId);
-                    if (msg) msg.content = '抱歉，未能获取到答案。请稍后重试。';
+                // 处理结果
+                const msg = kbChatMessages.value.find(m => m.id === aiMsgId);
+                if (!hasReceivedAnswer || !answerContent.trim()) {
+                    if (msg) msg.content = '抱歉，知识库中暂无相关内容。你可以尝试上传相关文档后再提问。';
                 }
             } catch (err) {
+                console.error('知识库查询失败:', err);
                 const msg = kbChatMessages.value.find(m => m.id === aiMsgId);
                 if (msg) msg.content = '抱歉，查询知识库时出错：' + err.message;
             } finally {
@@ -3782,8 +4307,9 @@ const app = createApp({
                 else if (mgmtTab.value === 'exam') await loadExamRecords();
                 else if (mgmtTab.value === 'employment') await loadEmploymentData();
             }
+            else if (newVal === 'email') await loadEmailConfig();
         });
-        
+
         watch(mgmtTab, async (newTab) => {
             if (activeTab.value === 'management') {
                 if (newTab === 'student') await loadStudents();
@@ -3791,9 +4317,11 @@ const app = createApp({
                 else if (newTab === 'employment') await loadEmploymentData();
             }
         });
-        
+
         onMounted(async () => {
             checkLogin();
+            loadRagStats();
+            loadEmailConfig();
         });
         
         // ============================================
@@ -3826,10 +4354,14 @@ const app = createApp({
             kbUploadLoading, kbUploadCategory, kbCategories, handleKnowledgeUpload,
             searchKnowledge, kbSearchQuery, kbSearchResults, kbSearchLoading,
             askKnowledge, kbChatMessages, kbChatLoading, kbCurrentQuestion, kbChatContainer,
+            ragStats, loadRagStats,
             // Agent助手
             agentMessages, agentQuestion, agentLoading, agentPersona, sendAgentQuestion, agentChatContainer, formatMessage,
             // 心理疏导
             psychologyMessages, psychologyQuestion, psychologyLoading, psychologyChatContainer, sendPsychologyQuestion, emotionTags, selectedEmotion, initPsychologyMessages, psychologyRole,
+            // 邮件发送
+            emailForm, emailPreview, emailConfig, emailGenerating, emailSending, emailTesting, testEmailTo,
+            loadEmailConfig, generateEmail, generateAndSendEmail, testEmailService, resetEmailForm, useTemplate, formatEmailPreview,
             // 作业提交
             showHomeworkDialog, homeworkForm, homeworkSubmitting, homeworkDragOver,
             submitHomework, handleHomeworkFileSelect, handleHomeworkFileDrop

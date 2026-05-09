@@ -27,6 +27,9 @@ os.makedirs(UPLOAD_DIR, exist_ok=True)
 # 支持的文件格式
 SUPPORTED_EXTENSIONS = ['txt', 'pdf', 'docx']
 
+# 文件大小限制 (10MB)
+MAX_FILE_SIZE = 10 * 1024 * 1024
+
 
 # ============================================
 # 文件解析函数
@@ -147,14 +150,22 @@ async def upload_homework_file(
     # 读取文件内容
     file_bytes = await file.read()
     
+    # 检查文件大小
+    if len(file_bytes) > MAX_FILE_SIZE:
+        raise HTTPException(
+            status_code=400, 
+            detail=f"文件大小超过限制，最大支持 {MAX_FILE_SIZE // (1024*1024)}MB"
+        )
+    
     # 解析文件内容
     try:
         content = parse_file_content(file_bytes, file.filename)
     except ValueError as e:
         raise HTTPException(status_code=400, detail=str(e))
     
-    # 生成唯一文件名保存
-    unique_filename = f"{uuid.uuid4().hex}_{file.filename}"
+    # 生成唯一文件名保存（防止路径遍历攻击）
+    safe_filename = os.path.basename(file.filename)
+    unique_filename = f"{uuid.uuid4().hex}_{safe_filename}"
     file_path = os.path.join(UPLOAD_DIR, unique_filename)
     
     # 保存文件

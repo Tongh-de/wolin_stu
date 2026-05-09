@@ -1,4 +1,3 @@
-from sqlalchemy import and_
 from sqlalchemy.orm import Session
 from model.exam_model import StuExamRecord
 

@@ -17,6 +17,10 @@ import zipfile
 import xml.etree.ElementTree as ET
 from PyPDF2 import PdfReader
 from dotenv import load_dotenv
+import logging
+
+# 日志配置
+rag_logger = logging.getLogger('RAG')
 
 # 加载环境变量
 load_dotenv()
@@ -53,13 +57,13 @@ def get_embeddings():
             from langchain_huggingface import HuggingFaceEmbeddings
         except ImportError:
             from langchain_community.embeddings import HuggingFaceBgeEmbeddings as HuggingFaceEmbeddings
-        print(f"[RAG] 正在加载本地嵌入模型 BAAI/bge-m3...")
+        rag_logger.info("正在加载本地嵌入模型 BAAI/bge-m3...")
         _embeddings = HuggingFaceEmbeddings(
             model_name="BAAI/bge-m3",
             model_kwargs={'device': 'cpu'},
             encode_kwargs={'normalize_embeddings': True}
         )
-        print(f"[RAG] 嵌入模型加载完成: BAAI/bge-m3 (本地)")
+        rag_logger.info("嵌入模型加载完成: BAAI/bge-m3 (本地)")
     return _embeddings
 
 
@@ -68,7 +72,7 @@ def get_vectorstore():
     global _vectorstore
     if _vectorstore is None:
         from langchain_milvus import Milvus
-        print(f"[RAG] 正在连接 Milvus: {MILVUS_HOST}:{MILVUS_PORT}")
+        rag_logger.info(f"正在连接 Milvus: {MILVUS_HOST}:{MILVUS_PORT}")
         _vectorstore = Milvus(
             embedding_function=get_embeddings(),
             connection_args={
@@ -77,7 +81,7 @@ def get_vectorstore():
             },
             collection_name=COLLECTION_NAME,
         )
-        print(f"[RAG] Milvus 向量库初始化成功")
+        rag_logger.info("Milvus 向量库初始化成功")
     return _vectorstore
 
 
@@ -93,7 +97,7 @@ def get_llm_client():
             api_key=api_key,
             base_url=LLM_BASE_URL
         )
-        print(f"[RAG] LLM 客户端加载完成: {LLM_MODEL}")
+        rag_logger.info(f"LLM 客户端加载完成: {LLM_MODEL}")
     return _llm_client
 
 
@@ -192,7 +196,7 @@ def add_document_to_vectorstore(doc_id: str, text: str, filename: str, category:
     if not chunks:
         raise ValueError("文档内容为空，无法入库")
 
-    print(f"[RAG] 文档 '{filename}' 切分为 {len(chunks)} 个块")
+    rag_logger.info(f"文档 '{filename}' 切分为 {len(chunks)} 个块")
 
     # 准备元数据
     metadatas = [{
@@ -203,36 +207,37 @@ def add_document_to_vectorstore(doc_id: str, text: str, filename: str, category:
         "total_chunks": len(chunks)
     } for i in range(len(chunks))]
 
-    print(f"[RAG] 开始向量化 {len(chunks)} 个文本块...")
+    rag_logger.info(f"开始向量化 {len(chunks)} 个文本块...")
 
     # 获取嵌入模型
     emb = get_embeddings()
-    print(f"[RAG] 嵌入模型获取成功")
+    rag_logger.debug("嵌入模型获取成功")
 
     # 直接使用 pymilvus 操作
     from pymilvus import connections, Collection, FieldSchema, CollectionSchema, DataType, utility
     import numpy as np
 
-    print(f"[RAG] 连接 Milvus...")
+    rag_logger.info("连接 Milvus...")
     connections.connect(host=MILVUS_HOST, port=MILVUS_PORT, timeout=60)
-    print(f"[RAG] Milvus 连接成功")
+    rag_logger.info("Milvus 连接成功")
 
     # 检查 collection 是否存在
     if utility.has_collection(COLLECTION_NAME):
-        print(f"[RAG] Collection '{COLLECTION_NAME}' 已存在")
+        rag_logger.info(f"Collection '{COLLECTION_NAME}' 已存在")
         collection = Collection(COLLECTION_NAME)
         
         # 检查是否缺少 text 字段（兼容旧 collection）
         schema = collection.schema
         field_names = [f.name for f in schema.fields]
         if "text" not in field_names:
-            print(f"[RAG] 检测到旧版 collection，缺少 text 字段，需要重建...")
+            rag_logger.warning("检测到旧版 collection，缺少 text 字段，需要重建...")
             # 删除旧 collection
             collection.drop()
             utility.has_collection(COLLECTION_NAME)  # 刷新状态
             collection = None
     else:
-        print(f"[RAG] 创建 Collection '{COLLECTION_NAME}'...")
+        rag_logger.info(f"创建 Collection '{COLLECTION_NAME}'...")
+        collection = None  # 标记需要创建新 collection
     
     if collection is None:
         # BGE-M3 生成 1024 维向量
@@ -249,22 +254,33 @@ def add_document_to_vectorstore(doc_id: str, text: str, filename: str, category:
         ]
         schema = CollectionSchema(fields=fields, description="RAG Knowledge Base")
         collection = Collection(name=COLLECTION_NAME, schema=schema)
-        print(f"[RAG] Collection 创建成功")
+        rag_logger.info("Collection 创建成功")
         
         # 创建索引（必须！）
-        print(f"[RAG] 创建向量索引...")
+        rag_logger.info("创建向量索引...")
         index_params = {"index_type": "IVF_FLAT", "params": {"nlist": 128}, "metric_type": "L2"}
         collection.create_index(field_name="vector", index_params=index_params)
-        print(f"[RAG] 索引创建成功")
+        rag_logger.info("索引创建成功")
 
     # 加载 collection
     collection.load()
-    print(f"[RAG] Collection 已加载")
+    rag_logger.info("Collection 已加载")
 
-    # 生成向量
-    print(f"[RAG] 正在生成向量...")
-    vectors = emb.embed_documents(chunks)
-    print(f"[RAG] 向量生成完成，共 {len(vectors)} 个")
+    # 生成向量 - 分批处理，每批 100 个
+    rag_logger.info("正在生成向量...")
+    batch_size = 100
+    all_vectors = []
+    total_batches = (len(chunks) + batch_size - 1) // batch_size
+
+    for i in range(0, len(chunks), batch_size):
+        batch = chunks[i:i+batch_size]
+        batch_num = i // batch_size + 1
+        rag_logger.info(f"  正在处理第 {batch_num}/{total_batches} 批 ({len(batch)} 个)...")
+        batch_vectors = emb.embed_documents(batch)
+        all_vectors.extend(batch_vectors)
+
+    vectors = all_vectors
+    rag_logger.info(f"向量生成完成，共 {len(vectors)} 个")
 
     # 准备插入数据（包含 text 字段）
     ids = [f"{doc_id}_{i}" for i in range(len(chunks))]
@@ -276,16 +292,29 @@ def add_document_to_vectorstore(doc_id: str, text: str, filename: str, category:
     chunk_indices = [m["chunk_index"] for m in metadatas]
     total_chunks = [m["total_chunks"] for m in metadatas]
 
-    # 插入数据
-    print(f"[RAG] 正在插入数据到 Milvus...")
-    collection.insert([ids, vector_data, texts, doc_ids, filenames, categories, chunk_indices, total_chunks])
+    # 插入数据 - 分批插入
+    rag_logger.info("正在插入数据到 Milvus...")
+    insert_batch_size = 200
+    for i in range(0, len(ids), insert_batch_size):
+        end_idx = min(i + insert_batch_size, len(ids))
+        rag_logger.info(f"  插入第 {i//insert_batch_size + 1} 批数据 ({i}-{end_idx})...")
+        collection.insert([
+            ids[i:end_idx],
+            vector_data[i:end_idx],
+            texts[i:end_idx],
+            doc_ids[i:end_idx],
+            filenames[i:end_idx],
+            categories[i:end_idx],
+            chunk_indices[i:end_idx],
+            total_chunks[i:end_idx]
+        ])
     collection.flush()
-    print(f"[RAG] 数据插入完成!")
+    rag_logger.info("数据插入完成!")
 
     # 关闭连接
     connections.disconnect(alias="default")
 
-    print(f"[RAG] 文档 '{filename}' 已入库，共 {len(chunks)} 个向量")
+    rag_logger.info(f"文档 '{filename}' 已入库，共 {len(chunks)} 个向量")
     return len(chunks)
 
 
@@ -408,7 +437,7 @@ async def upload_document(
     - category: 文档分类
     """
     try:
-        print(f"[RAG] 收到上传请求: {file.filename}, category: {category}")
+        rag_logger.info(f"收到上传请求: {file.filename}, category: {category}")
 
         # 读取文件
         file_bytes = await file.read()
@@ -446,7 +475,7 @@ async def upload_document(
     except ValueError as e:
         return JSONResponse(status_code=400, content={"code": 400, "message": str(e)})
     except Exception as e:
-        print(f"[RAG] 上传失败: {str(e)}")
+        rag_logger.error(f"上传失败: {e}")
         return JSONResponse(status_code=500, content={"code": 500, "message": f"上传失败: {str(e)}"})
 
 
@@ -463,15 +492,19 @@ async def query_knowledge(req: QueryRequest):
 
     async def stream_generate():
         try:
-            print(f"[RAG] 收到问答请求: {req.question}")
+            rag_logger.info(f"收到问答请求: {req.question}")
 
             # 1. 检索相关文档块
-            chunks = await asyncio.to_thread(retrieve_relevant_chunks, req.question, req.top_k)
-            print(f"[RAG] 检索到 {len(chunks)} 个相关片段")
+            try:
+                chunks = await asyncio.to_thread(retrieve_relevant_chunks, req.question, req.top_k)
+                rag_logger.debug(f"检索到 {len(chunks)} 个相关片段")
+            except Exception as retrieve_err:
+                rag_logger.warning(f"检索失败（可能知识库为空或Milvus未启动）: {retrieve_err}")
+                chunks = []
 
             # 2. 流式 LLM 生成答案
             if not chunks:
-                yield f"data: {json.dumps({'type': 'answer', 'content': '抱歉，知识库中没有找到与您问题相关的内容。'}, ensure_ascii=False)}\n\n"
+                yield f"data: {json.dumps({'type': 'answer', 'content': '抱歉，知识库中暂无相关内容。你可以上传相关文档后再提问。'}, ensure_ascii=False)}\n\n"
                 yield "data: [DONE]\n\n"
                 return
 
@@ -531,7 +564,7 @@ async def query_knowledge(req: QueryRequest):
             yield "data: [DONE]\n\n"
 
         except Exception as e:
-            print(f"[RAG] 流式问答失败: {str(e)}")
+            rag_logger.error(f"流式问答失败: {e}")
             yield f"data: {json.dumps({'type': 'error', 'content': f'问答处理失败: {str(e)}'}, ensure_ascii=False)}\n\n"
 
     return StreamingResponse(
@@ -569,21 +602,27 @@ async def search_documents(q: str, top_k: int = 5):
 async def get_stats():
     """获取知识库统计信息"""
     try:
-        vs = get_vectorstore()
-        # 获取 collection 信息
-        return {
-            "code": 200,
-            "message": "获取成功",
-            "data": {
-                "collection_name": COLLECTION_NAME,
-                "milvus_host": MILVUS_HOST,
-                "milvus_port": MILVUS_PORT,
-                "embedding_model": "text-embedding-v3",
-                "llm_model": LLM_MODEL
-            }
-        }
+        # 先测试 Milvus 连接
+        from pymilvus import connections, utility
+        connections.connect(host=MILVUS_HOST, port=MILVUS_PORT, timeout=5)
+        connected = True
+        connections.disconnect(alias="default")
     except Exception as e:
-        return JSONResponse(status_code=500, content={"code": 500, "message": f"获取统计失败: {str(e)}"})
+        rag_logger.warning(f"Milvus 连接测试失败: {e}")
+        connected = False
+    
+    return {
+        "code": 200,
+        "message": "获取成功",
+        "data": {
+            "connected": connected,
+            "collection_name": COLLECTION_NAME,
+            "milvus_host": MILVUS_HOST,
+            "milvus_port": MILVUS_PORT,
+            "embedding_model": "BAAI/bge-m3",
+            "llm_model": LLM_MODEL
+        }
+    }
 
 
 @router.delete("/clear")

@@ -118,5 +118,5 @@ finally:
     try:
         cursor.close()
         conn.close()
-    except:
-        pass
+    except Exception:
+        pass  # 忽略关闭时的异常

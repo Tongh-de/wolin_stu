@@ -13,6 +13,10 @@ from fastapi import APIRouter, HTTPException, Depends
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from typing import Optional, List, Callable
+import logging
+
+# 日志配置
+agent_logger = logging.getLogger('Agent')
 import os
 import asyncio
 import json
@@ -346,14 +350,14 @@ async def query_knowledge_base(question: str) -> str:
 
         results = await asyncio.to_thread(retrieve_relevant_chunks, question, top_k=5)
 
-        print(f"[知识库检索] 问题: {question}, 结果数量: {len(results) if results else 0}")
+        agent_logger.info(f"知识库检索 - 问题: {question}, 结果数量: {len(results) if results else 0}")
 
         if not results:
             return "【知识库检索结果为空】当前知识库中没有找到与该问题相关的内容。"
 
         relevant_results = [r for r in results if r.get("score", 999) < 1.5]
 
-        print(f"[知识库检索] 过滤后相关结果: {len(relevant_results)} 条（阈值: distance < 1.5）")
+        agent_logger.info(f"知识库检索 - 过滤后相关结果: {len(relevant_results)} 条（阈值: distance < 1.5）")
 
         if not relevant_results:
             return "【知识库检索结果】知识库中确实没有与您问题相关的内容。我无法根据现有知识库回答这个问题。"
@@ -362,12 +366,12 @@ async def query_knowledge_base(question: str) -> str:
         for i, chunk in enumerate(relevant_results, 1):
             content = chunk.get("content", "")
             filename = chunk.get("metadata", {}).get("filename", "未知文档")
-            print(f"[知识库检索] 来源{i}: {filename}, 距离: {chunk.get('score', 0):.2f}")
+            agent_logger.debug(f"知识库检索 - 来源{i}: {filename}, 距离: {chunk.get('score', 0):.2f}")
             formatted_results.append(f"【来源{i}: {filename}】\n{content}")
 
         return "【知识库检索结果】\n" + "\n\n".join(formatted_results)
     except Exception as e:
-        print(f"[知识库检索错误] {str(e)}")
+        agent_logger.error(f"知识库检索错误: {e}")
         return f"【知识库查询失败】无法访问知识库，错误信息: {str(e)}。"
 
 
@@ -416,13 +420,13 @@ async def query_student_data(question: str) -> str:
     db = next(get_db())
     try:
         sql = await generate_sql(question)
-        print(f"[DEBUG] 生成的SQL: {sql}")
+        agent_logger.debug(f"生成的SQL: {sql}")
 
         if not sql.strip().lower().startswith("select"):
             return "错误：只支持查询操作（SELECT）"
 
         data = await execute_sql_to_dict(db, sql)
-        print(f"[DEBUG] 查询结果: {len(data)} 条记录")
+        agent_logger.debug(f"查询结果: {len(data)} 条记录")
         row_count = len(data)
 
         if row_count == 0:
@@ -480,11 +484,11 @@ def save_agent_memory(session_id: str, user_id: int, role: str, content: str, in
             )
             db.add(memory)
             db.commit()
-            print(f"[记忆保存] session={session_id}, user_id={user_id}, role={role}, turn={max_turn + 1}")
+            agent_logger.info(f"记忆保存 - session={session_id}, user_id={user_id}, role={role}, turn={max_turn + 1}")
         finally:
             db.close()
     except Exception as e:
-        print(f"[记忆保存失败] {str(e)}")
+        agent_logger.error(f"记忆保存失败: {e}")
 
 
 def load_agent_memory(session_id: str, user_id: int, limit: int = 10) -> List[dict]:
@@ -499,12 +503,12 @@ def load_agent_memory(session_id: str, user_id: int, limit: int = 10) -> List[di
 
             records = list(reversed(records))
             messages = [r.to_dict() for r in records]
-            print(f"[记忆加载] session={session_id}, user_id={user_id}, 加载 {len(messages)} 条消息")
+            agent_logger.info(f"记忆加载 - session={session_id}, user_id={user_id}, 加载 {len(messages)} 条消息")
             return messages
         finally:
             db.close()
     except Exception as e:
-        print(f"[记忆加载失败] {str(e)}")
+        agent_logger.error(f"记忆加载失败: {e}")
         return []
 
 
@@ -518,12 +522,12 @@ def clear_agent_memory(session_id: str, user_id: int) -> bool:
                 AgentMemory.user_id == user_id
             ).delete()
             db.commit()
-            print(f"[记忆清除] session={session_id}, user_id={user_id}")
+            agent_logger.info(f"记忆清除 - session={session_id}, user_id={user_id}")
             return True
         finally:
             db.close()
     except Exception as e:
-        print(f"[记忆清除失败] {str(e)}")
+        agent_logger.error(f"记忆清除失败: {e}")
         return False
 
 
@@ -538,7 +542,8 @@ def get_memory_count(session_id: str, user_id: int) -> int:
             ).count()
         finally:
             db.close()
-    except:
+    except Exception as e:
+        agent_logger.warning(f"获取记忆数量失败: {e}")
         return 0
 
 
@@ -574,7 +579,7 @@ async def classify_intent(question: str) -> tuple[str, str]:
     - general: 通用问答
     """
     question_lower = question.lower()
-    print(f"[意图识别] 原始问题: {question}")
+    agent_logger.info(f"意图识别 - 原始问题: {question}")
 
     question_clean = re.sub(r'[!！.?。,，、\s]', '', question_lower)
 
@@ -621,10 +626,10 @@ async def classify_intent(question: str) -> tuple[str, str]:
     for keywords, intent, reason in rules:
         for kw in keywords:
             if kw in question_clean or kw in question_lower:
-                print(f"[意图识别] 匹配到: intent={intent}, reason={reason}, keyword={kw}")
+                agent_logger.debug(f"意图识别 - 匹配到: intent={intent}, reason={reason}, keyword={kw}")
                 return intent, reason
 
-    print(f"[意图识别] 未匹配，返回: general")
+    agent_logger.debug("意图识别 - 未匹配，返回: general")
     return "general", "通用问答请求"
 
 
@@ -695,7 +700,7 @@ async def call_llm(client: AsyncOpenAI, model: str, messages: list,
             "content": message.content or ""
         }
     except Exception as e:
-        print(f"[LLM调用错误] {str(e)}")
+        agent_logger.error(f"LLM调用错误: {e}")
         raise
 
 
@@ -714,12 +719,12 @@ async def call_llm_with_tools(client: AsyncOpenAI, model: str, messages: list,
         if result["type"] == "tool_call":
             tool_name = result["tool"]
             args = result["arguments"]
-            print(f"[工具调用] 工具名称: {tool_name}, 参数: {args}")
+            agent_logger.info(f"工具调用 - 工具名称: {tool_name}, 参数: {args}")
 
             if tool_name in TOOL_FUNCTIONS:
                 tool_func = TOOL_FUNCTIONS[tool_name]
                 tool_result = await tool_func(**args)
-                print(f"[工具调用] 返回结果长度: {len(tool_result)} 字符")
+                agent_logger.debug(f"工具调用 - 返回结果长度: {len(tool_result)} 字符")
 
                 assistant_msg = messages[-1]["content"] if messages else ""
                 tool_result_msg = f"[{tool_name} 结果]: {tool_result}"

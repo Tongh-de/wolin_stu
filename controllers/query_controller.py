@@ -14,6 +14,10 @@ from langchain_chroma import Chroma
 from langchain_community.embeddings import DashScopeEmbeddings
 from database import get_db
 from services import ConversationService
+import logging
+
+# 日志配置
+query_logger = logging.getLogger('Query')
 
 load_dotenv()
 
@@ -31,16 +35,16 @@ vectordb = None
 try:
     api_key = os.getenv("DASHSCOPE_API_KEY")
     if not api_key:
-        print("警告: 未设置 DASHSCOPE_API_KEY，知识库功能不可用")
+        query_logger.warning("未设置 DASHSCOPE_API_KEY，知识库功能不可用")
     else:
         embeddings = DashScopeEmbeddings(model="text-embedding-v3", dashscope_api_key=api_key)
         if os.path.exists("./chroma_db") and os.path.isdir("./chroma_db"):
             vectordb = Chroma(persist_directory="./chroma_db", embedding_function=embeddings)
-            print("向量知识库加载成功")
+            query_logger.info("向量知识库加载成功")
         else:
-            print("知识库目录不存在")
+            query_logger.info("知识库目录不存在")
 except Exception as e:
-    print(f"向量知识库加载失败: {e}")
+    query_logger.error(f"向量知识库加载失败: {e}")
 
 
 class QueryRequest(BaseModel):
@@ -80,7 +84,7 @@ async def retrieve_schema_context(vectordb) -> str:
         if docs:
             return "\n\n".join([doc.page_content for doc in docs])[:4000]
     except Exception as e:
-        print(f"检索表结构失败: {e}")
+        query_logger.error(f"检索表结构失败: {e}")
     return FALLBACK_SCHEMA
 
 
@@ -142,7 +146,7 @@ async def classify_intent_llm(question: str, history_text: str = "") -> str:
         if intent in ["sql", "analysis", "chat"]:
             return intent
     except Exception as e:
-        print(f"LLM意图分类失败: {e}")
+        query_logger.error(f"LLM意图分类失败: {e}")
 
     return "sql"  # 默认按SQL处理
 
@@ -177,6 +181,10 @@ async def generate_sql(question: str, retry: bool = False, previous_sql: Optiona
 
 async def execute_sql_to_dict(db: Session, sql: str):
     def _sync():
+        # 使用 utils.security 中的 SQLValidator 验证 SQL
+        from utils.security import SQLValidator
+        SQLValidator.validate_query(sql)
+        
         result = db.execute(text(sql))
         rows = result.fetchall()
         if not rows:
@@ -212,7 +220,8 @@ async def natural_query(req: QueryRequest, db: Session = Depends(get_db)):
             else:
                 sql = await generate_sql(question)
         except Exception as e:
-            raise HTTPException(500, f"生成SQL失败: {e}")
+            query_logger.error(f"生成SQL失败: {e}")
+            raise HTTPException(500, "SQL生成失败，请稍后重试")
 
         if not sql.strip().lower().startswith("select"):
             raise HTTPException(400, "只能生成SELECT语句")
@@ -243,7 +252,8 @@ async def natural_query(req: QueryRequest, db: Session = Depends(get_db)):
                 else:
                     return {"type": "sql", "session_id": session_id, "turn_index": turn_index, "sql": sql_corrected, "data_truncated": True, "sample_data": data2[:10]}
             except Exception as e2:
-                raise HTTPException(500, f"SQL执行失败: {str(e)}")
+                query_logger.error(f"SQL重试执行失败: {e2}")
+                raise HTTPException(500, "SQL执行失败，请稍后重试")
 
     elif intent == "analysis":
         latest_turn = ConversationService.get_latest_turn(db, session_id)
@@ -255,8 +265,8 @@ async def natural_query(req: QueryRequest, db: Session = Depends(get_db)):
                     data_context = f"上一轮数据（共{len(full_data)}条）：\n{json.dumps(full_data, ensure_ascii=False, indent=2)[:5000]}\n"
                 else:
                     data_context = "上一轮数据量较大。\n"
-            except:
-                data_context = "读取数据失败。\n"
+            except (json.JSONDecodeError, KeyError) as e:
+                data_context = f"读取数据失败: {e}\n"
 
         analysis_prompt = f"你是一个数据分析专家。基于以下数据回答用户问题。\n\n数据：\n{data_context}\n\n问题：{question}\n"
         try:
@@ -270,7 +280,8 @@ async def natural_query(req: QueryRequest, db: Session = Depends(get_db)):
             ConversationService.save_turn(db, session_id, turn_index, question, answer_text=answer)
             return {"type": "answer", "session_id": session_id, "turn_index": turn_index, "answer": answer}
         except Exception as e:
-            raise HTTPException(500, f"分析失败: {str(e)}")
+            query_logger.error(f"数据分析失败: {e}")
+            raise HTTPException(500, "分析失败，请稍后重试")
 
     else:
         chat_prompt = f"用户：{question}\n助手："
@@ -285,4 +296,5 @@ async def natural_query(req: QueryRequest, db: Session = Depends(get_db)):
             ConversationService.save_turn(db, session_id, turn_index, question, answer_text=answer)
             return {"type": "answer", "session_id": session_id, "turn_index": turn_index, "answer": answer}
         except Exception as e:
-            raise HTTPException(500, f"闲聊失败: {str(e)}")
+            query_logger.error(f"闲聊失败: {e}")
+            raise HTTPException(500, "服务暂时不可用，请稍后重试")

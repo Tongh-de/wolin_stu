@@ -19,7 +19,7 @@ class ChartService {
             tooltip: { trigger: 'axis' },
             xAxis: { type: 'category', axisLabel: { rotate: 30 } },
             yAxis: { type: 'value' },
-            series: [{ type: 'bar', itemStyle: { borderRadius: [4, 4, 0, 0] }]
+            series: [{ type: 'bar', itemStyle: { borderRadius: { topLeft: 4, topRight: 4, bottomLeft: 0, bottomRight: 0 } } }]
         };
         
         chart.setOption({ ...defaultOptions, ...options });
@@ -76,29 +76,30 @@ class ChartService {
     renderClassRanking(container, data) {
         const chart = echarts.init(container);
         
-        // 排序数据
         const sortedData = [...data].sort((a, b) => b.avg_score - a.avg_score);
-        const names = sortedData.map(d => d.class_name || `班级${d.class_id}`);
+        const names = sortedData.map(d => d.class_name || 'Class' + d.class_id);
         const scores = sortedData.map(d => parseFloat(d.avg_score || 0).toFixed(1));
         
         chart.setOption({
             grid: { left: '3%', right: '4%', bottom: '3%', top: '3%', containLabel: true },
-            tooltip: { trigger: 'axis', formatter: '{b}: {c}分' },
+            tooltip: { trigger: 'axis', formatter: '{b}: {c}' },
             xAxis: { type: 'value', max: 100 },
             yAxis: { type: 'category', data: names, axisLabel: { fontSize: 11 } },
             series: [{
                 type: 'bar',
                 data: scores,
                 itemStyle: {
-                    color: (params) => {
-                        const color = params.value >= 90 ? '#10b981' : 
-                                     params.value >= 75 ? '#3b82f6' :
-                                     params.value >= 60 ? '#f59e0b' : '#ef4444';
+                    color: function(params) {
+                        var color;
+                        if (params.value >= 90) color = '#10b981';
+                        else if (params.value >= 75) color = '#3b82f6';
+                        else if (params.value >= 60) color = '#f59e0b';
+                        else color = '#ef4444';
                         return color;
                     },
                     borderRadius: [0, 4, 4, 0]
                 },
-                label: { show: true, position: 'right', formatter: '{c}分' }
+                label: { show: true, position: 'right', formatter: '{c}' }
             }]
         });
         
@@ -112,13 +113,13 @@ class ChartService {
     renderGenderPie(container, data) {
         const chart = echarts.init(container);
         
-        const chartData = [
-            { value: data.male_count || 0, name: '男' },
-            { value: data.female_count || 0, name: '女' }
+        var chartData = [
+            { value: data.male_count || 0, name: 'Male' },
+            { value: data.female_count || 0, name: 'Female' }
         ];
         
         chart.setOption({
-            tooltip: { trigger: 'item', formatter: '{b}: {c}人 ({d}%)' },
+            tooltip: { trigger: 'item', formatter: '{b}: {c} ({d}%)' },
             legend: { orient: 'vertical', right: '5%', top: 'center' },
             series: [{
                 type: 'pie',
@@ -142,10 +143,11 @@ class ChartService {
     /**
      * 仪表盘
      */
-    renderGauge(container, value, options = {}) {
-        const chart = echarts.init(container);
+    renderGauge(container, value, options) {
+        var chart = echarts.init(container);
+        options = options || {};
         
-        const defaultOptions = {
+        var defaultOptions = {
             series: [{
                 type: 'gauge',
                 startAngle: 180,
@@ -166,7 +168,7 @@ class ChartService {
             }]
         };
         
-        chart.setOption({ ...defaultOptions, ...options });
+        chart.setOption(Object.assign({}, defaultOptions, options));
         this.charts[container.id] = chart;
         return chart;
     }
@@ -175,14 +177,14 @@ class ChartService {
      * 成绩分布直方图
      */
     renderScoreDistribution(container, data) {
-        const chart = echarts.init(container);
+        var chart = echarts.init(container);
+        data = data || [];
         
-        // 分数段分布
-        const ranges = ['0-60', '60-70', '70-80', '80-90', '90-100'];
-        const counts = [0, 0, 0, 0, 0];
+        var ranges = ['0-60', '60-70', '70-80', '80-90', '90-100'];
+        var counts = [0, 0, 0, 0, 0];
         
-        (data || []).forEach(score => {
-            const s = parseFloat(score) || 0;
+        data.forEach(function(score) {
+            var s = parseFloat(score) || 0;
             if (s < 60) counts[0]++;
             else if (s < 70) counts[1]++;
             else if (s < 80) counts[2]++;
@@ -199,7 +201,9 @@ class ChartService {
                 type: 'bar',
                 data: counts,
                 itemStyle: {
-                    color: (params) => ['#ef4444', '#f59e0b', '#eab308', '#84cc16', '#10b981'][params.dataIndex]
+                    color: function(params) {
+                        return ['#ef4444', '#f59e0b', '#eab308', '#84cc16', '#10b981'][params.dataIndex];
+                    }
                 },
                 barWidth: '50%'
             }]
@@ -213,8 +217,7 @@ class ChartService {
      * 刷新图表
      */
     refresh(container, data, type) {
-        const chart = this.charts[container.id];
-        if (!chart) return;
+        if (!this.charts[container.id]) return;
         
         switch (type) {
             case 'classRanking':
@@ -233,8 +236,9 @@ class ChartService {
      * 响应式调整
      */
     resizeAll() {
-        Object.values(this.charts).forEach(chart => {
-            chart?.resize();
+        var self = this;
+        Object.values(this.charts).forEach(function(chart) {
+            if (chart) chart.resize();
         });
     }
     
@@ -242,12 +246,12 @@ class ChartService {
      * 销毁所有图表
      */
     disposeAll() {
-        Object.values(this.charts).forEach(chart => {
-            chart?.dispose();
+        Object.values(this.charts).forEach(function(chart) {
+            if (chart) chart.dispose();
         });
         this.charts = {};
     }
 }
 
-// 导出
+// Export
 window.ChartService = ChartService;

@@ -3,11 +3,43 @@ from sqlalchemy.orm import Session
 from database import get_db
 from services import EmploymentService
 from schemas import ResponseBase, ListResponse
-from schemas.emp_schemas import EmploymentUpdate, EmploymentResp
+from schemas.emp_schemas import EmploymentUpdate, EmploymentResp, EmploymentCreate
 from utils.auth_deps import get_current_user, require_admin, require_teacher_or_admin
 from model.user import User
+from model.employment import Employment
 
 router = APIRouter(prefix="/employment", tags=["就业管理模块"])
+
+
+@router.get("/list", response_model=ListResponse)
+def get_employment_list(
+        db: Session = Depends(get_db),
+        current_user: User = Depends(require_teacher_or_admin)  # 教师或管理员
+):
+    """获取所有就业信息列表"""
+    data = EmploymentService.get_all_employments(db)
+    list_data = [EmploymentResp.model_validate(item) for item in data]
+    return ListResponse(code=200, message="查询成功", data=list_data, total=len(list_data))
+
+
+@router.post("/", response_model=ResponseBase)
+def create_employment(
+        create_data: EmploymentCreate,
+        db: Session = Depends(get_db),
+        current_user: User = Depends(require_teacher_or_admin)  # 教师或管理员
+):
+    """创建就业信息"""
+    # 检查该学生是否已有就业记录
+    existing = EmploymentService.get_employment_by_stu_id(db, create_data.stu_id)
+    if existing:
+        raise HTTPException(status_code=400, detail="该学生已有就业记录")
+
+    emp = EmploymentService.create_employment(db, create_data)
+    if not emp:
+        raise HTTPException(status_code=500, detail="创建失败")
+
+    emp_data = EmploymentResp.model_validate(emp)
+    return ResponseBase(code=200, message="创建成功", data=emp_data)
 
 
 @router.get("/students/{stu_id}", response_model=ResponseBase)
