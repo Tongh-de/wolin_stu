@@ -19,7 +19,7 @@ def check_result(name: str, success: bool, detail: str = ""):
 
 def main():
     print("=" * 60)
-    print("[检查] 沃林学生管理系统 - 配置检查")
+    print("[检查] 拾光学子成长管理平台 - 配置检查")
     print("=" * 60)
     
     all_passed = True

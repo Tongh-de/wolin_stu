@@ -1,10 +1,10 @@
-# Wolin Students Education Management System
+# Shiguang Student Growth Management Platform
 
 A comprehensive education management system built on FastAPI and SQLAlchemy, providing RESTful API interfaces for core functionalities such as student, class, teacher, employment, exam management, and AI-powered features.
 
 ## Project Overview
 
-Wolin Students is an information management system designed for educational institutions, adopting a frontend-backend separation architecture. The backend is built using the Python FastAPI framework to deliver RESTful APIs, combined with SQLAlchemy for database operations. The system supports functionalities including student information management, class management, teacher management, employment tracking, exam score management, data analytics, NL2SQL natural language queries, RAG knowledge base, and intelligent Agent.
+Shiguang Student Growth Management Platform is an information management system designed for educational institutions, adopting a frontend-backend separation architecture. The backend is built using the Python FastAPI framework to deliver RESTful APIs, combined with SQLAlchemy for database operations. The system supports functionalities including student information management, class management, teacher management, employment tracking, exam score management, data analytics, NL2SQL natural language queries, RAG knowledge base, and intelligent Agent.
 
 ## Technology Stack
 
